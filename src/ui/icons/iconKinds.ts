@@ -1,0 +1,50 @@
+import type { ObjectType } from '@/core/types';
+
+/**
+ * Every icon the app can draw. Object types draw the object; the rest are tool glyphs.
+ * Owners of src/ui may add kinds; other modules may use any listed kind.
+ */
+export type IconKind =
+  | ObjectType
+  | 'tallCylinder'
+  | 'flatSphere'
+  | 'tallCube'
+  | 'flatCube'
+  | 'materials'
+  | 'editTerrain'
+  | 'editObject'
+  | 'resize'
+  | 'rotate'
+  | 'reposition'
+  | 'align'
+  | 'randomize'
+  | 'duplicate'
+  | 'delete'
+  | 'land'
+  | 'render'
+  | 'renderResume'
+  | 'renderClear'
+  | 'dice'
+  | 'sun'
+  | 'moon'
+  | 'stars'
+  | 'cloudCover'
+  | 'fog'
+  | 'haze'
+  | 'shadows'
+  | 'skySoft'
+  | 'skyDarker'
+  | 'skyCustom'
+  | 'skyOff'
+  | 'camera'
+  | 'director'
+  | 'eye'
+  | 'library'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'frame'
+  | 'wireframe'
+  | 'solid'
+  | 'selectAll'
+  | 'prev'
+  | 'next';

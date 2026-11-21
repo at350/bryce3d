@@ -1,0 +1,66 @@
+/* Kit controls. NOTE: foundation version; the ui owner restyles them per skin. */
+.bk-button { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--metal-lo); background: linear-gradient(var(--metal-hi), var(--metal)); color: var(--ink); cursor: pointer; }
+.bk-button--primary { background: var(--accent); color: #fff; border-color: transparent; }
+.bk-button--ghost { background: none; border-color: transparent; }
+.bk-button:disabled { opacity: 0.45; cursor: default; }
+
+.bk-iconbutton { display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; color: var(--ink); }
+.bk-iconbutton:hover { background: rgba(255, 255, 255, 0.45); }
+.bk-iconbutton.is-active { background: rgba(47, 95, 208, 0.2); }
+.bk-iconbutton:disabled { opacity: 0.35; cursor: default; }
+.bk-icon3d { display: inline-block; text-align: center; color: var(--accent); }
+
+.bk-dragvalue { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; }
+.bk-dragvalue__value { cursor: ew-resize; padding: 1px 4px; border-radius: 4px; background: rgba(0, 0, 0, 0.08); user-select: none; min-width: 36px; text-align: right; }
+.bk-dragvalue__input { width: 100%; font: inherit; }
+
+.bk-slider { display: grid; grid-template-columns: 1fr 2fr 44px; gap: 6px; align-items: center; font-size: 12px; }
+.bk-slider__value { text-align: right; font-variant-numeric: tabular-nums; }
+.bk-slider.is-disabled { opacity: 0.45; }
+
+.bk-swatch { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; cursor: pointer; }
+.bk-swatch__chip { position: relative; display: inline-block; border-radius: 4px; border: 1px solid rgba(0, 0, 0, 0.35); overflow: hidden; }
+.bk-swatch__chip input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+.bk-trackball { border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #9bb0e0 45%, #2a4aa8 100%); cursor: grab; touch-action: none; }
+.bk-cross { display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff, #b8bcc4); cursor: move; touch-action: none; font-size: 9px; color: var(--ink-soft); }
+.bk-dragpad { display: grid; place-items: center; border-radius: 6px; background: rgba(0, 0, 0, 0.12); cursor: ew-resize; touch-action: none; overflow: hidden; }
+
+.bk-tabs { display: inline-flex; gap: 2px; }
+.bk-tab { font: inherit; font-size: 12px; padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; color: var(--ink-soft); }
+.bk-tab.is-active { background: rgba(255, 255, 255, 0.6); color: var(--ink); font-weight: 600; }
+
+.bk-trimenu { position: relative; display: inline-block; }
+.bk-trimenu__trigger { font: inherit; font-size: 11px; background: none; border: 0; cursor: pointer; color: inherit; padding: 0 3px; }
+.bk-menu { position: absolute; z-index: 1000; top: 100%; left: 0; min-width: 160px; background: #f4f5f7; color: var(--ink); border-radius: 6px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); padding: 4px; display: flex; flex-direction: column; }
+.bk-trimenu--right .bk-menu { top: 0; left: 100%; }
+.bk-trimenu--up .bk-menu { top: auto; bottom: 100%; }
+.bk-menu__item { font: inherit; font-size: 12px; text-align: left; border: 0; background: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; display: flex; gap: 6px; }
+.bk-menu__item:hover { background: var(--accent); color: #fff; }
+.bk-menu__check { width: 12px; }
+.bk-menu__divider { height: 1px; background: rgba(0, 0, 0, 0.15); margin: 3px 4px; }
+
+.bk-lab { position: fixed; inset: 0; z-index: 100; background: var(--desk); display: grid; grid-template-rows: auto 1fr auto; color: var(--ink); }
+.bk-lab__header { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--metal); }
+.bk-lab__title { font-size: 16px; margin: 0; }
+.bk-lab__extra { margin-left: auto; }
+.bk-lab__body { overflow: auto; background: var(--metal-hi); }
+.bk-lab__footer { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 16px; background: var(--metal); }
+
+.bk-dialog__backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.35); display: grid; place-items: center; }
+.bk-dialog { max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; background: var(--metal-hi); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); }
+.bk-dialog__header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--metal); font-weight: 600; font-size: 13px; }
+.bk-dialog__close { background: none; border: 0; cursor: pointer; }
+.bk-dialog__body { padding: 12px; font-size: 13px; }
+.bk-dialog__footer { padding: 8px 12px; display: flex; justify-content: flex-end; gap: 8px; }
+
+.bk-memdots { display: flex; gap: 6px; }
+.bk-memdot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--metal-lo); background: var(--metal-hi); padding: 0; cursor: pointer; }
+.bk-memdot.is-filled { background: var(--accent); }
+
+.bk-toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; cursor: pointer; }
+.bk-toggle input { display: none; }
+.bk-toggle__dot { width: 12px; height: 12px; border-radius: 50%; background: var(--metal-lo); }
+.bk-toggle.is-on .bk-toggle__dot { background: var(--accent); }
+
+.bk-select { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; }
