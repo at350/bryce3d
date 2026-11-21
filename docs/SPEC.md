@@ -109,6 +109,11 @@ the app: e.g. `node scripts/shot.mjs http://localhost:5301/ /tmp/x.png --eval "_
 - Sun direction: `sunDirection(azimuth, altitude)`; azimuth 0 = toward −Z (in front of the default camera,
   i.e. back-lit), 90 = toward +X.
 - Colors in the data model are sRGB 0..1; the renderer linearizes.
+- **Camera model** (renderer and viewport must match exactly): basis `{right, up, forward} = cameraBasis(cam)`
+  from `core/math.ts`; vertical field of view `cam.fov`; aspect `render.width / render.height`; the ray for
+  normalized device coordinates x, y in [-1, 1] (x right, y up) is
+  `normalize(forward + x·tan(fov/2)·aspect·right + y·tan(fov/2)·up)`. The viewport's camera view shows this
+  exact frame (the document frame) and may show extra, dimmed surroundings outside it.
 
 ---
 
