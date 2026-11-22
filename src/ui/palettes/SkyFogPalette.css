@@ -1,0 +1,101 @@
+/* Sky & Fog palette row. Uses the skin variables so it follows bryce5 / bryce2 / bryce7. */
+.palette-row.skyfog {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 1px 2px 0;
+}
+.skyfog--compact { gap: 6px; }
+.skyfog--roomy { gap: 10px; }
+
+.skyfog__cell { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: none; }
+.skyfog__bars { display: flex; gap: 2px; height: 8px; }
+.skyfog__bars > * { flex: 1 1 0; min-width: 0; }
+
+.skyfog__sep {
+  flex: none;
+  width: 2px;
+  align-self: stretch;
+  margin: 2px 0 4px;
+  border-left: 1px solid rgba(0, 0, 0, 0.18);
+  border-right: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+/* Thumbnail art: a recessed little window, like Bryce's rendered thumbnails. */
+.skyfog__art { position: relative; border-radius: 5px; overflow: hidden; line-height: 0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.skyfog__art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(255, 255, 255, 0.25);
+  background: linear-gradient(rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 45%);
+  pointer-events: none;
+}
+
+/* Sky mode thumbnail: a button (click / drag cycles) with its triangle menu. */
+.skyfog__modewrap { position: relative; display: flex; }
+.skyfog__mode {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.skyfog__mode:focus-visible { outline: 2px solid var(--accent, #2f5fd0); outline-offset: 1px; }
+.skyfog__label {
+  position: absolute;
+  left: 3px;
+  bottom: 2px;
+  z-index: 1;
+  font: 700 7.5px/9px system-ui, sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.9), 0 1px 1px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  user-select: none;
+}
+.skyfog--compact .skyfog__label { font-size: 7px; }
+.skyfog__modemenu { position: absolute; top: -2px; right: -12px; }
+
+/* Cloud layer on/off pills under the frequency / amplitude pad. */
+.skyfog__layer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 8px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  background: linear-gradient(var(--metal-hi, #eceef1), var(--metal-lo, #9a9da3));
+  font: 700 7px/1 system-ui, sans-serif;
+  color: var(--ink-soft, #5b5e66);
+  cursor: pointer;
+}
+.skyfog__layerdot { width: 4px; height: 4px; border-radius: 50%; background: rgba(0, 0, 0, 0.3); }
+.skyfog__layer.is-on { color: var(--ink, #2a2c30); }
+.skyfog__layer.is-on .skyfog__layerdot { background: #ff8a1e; box-shadow: 0 0 3px #ffb262; }
+.skyfog__layer:focus-visible { outline: 2px solid var(--accent, #2f5fd0); outline-offset: 1px; }
+
+/* Sun ball + its column of small buttons. */
+.skyfog__cell--sun { flex-direction: row; align-items: center; gap: 4px; }
+.skyfog__suncol { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.skyfog__suncolor { margin-top: 2px; }
+
+/* Sky Lab, dice, options, memory dots. */
+.skyfog__cell--actions { gap: 5px; align-items: flex-start; }
+.skyfog__actionrow { display: flex; align-items: center; gap: 2px; }
+.skyfog__options { align-self: flex-start; }
+
+/* The menu triangles sit above the shelf, on the dark desk. */
+.skyfog .bk-trimenu__trigger { color: var(--desk-ink-hover, #b9bec8); }
+.skyfog .bk-trimenu__trigger:hover { color: var(--desk-ink-active, #fff); }

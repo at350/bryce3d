@@ -15,12 +15,22 @@ export function makeCloudLayer(overrides: Partial<CloudLayer> = {}): CloudLayer 
   };
 }
 
+/** High, thin, wispy layer (Bryce stratus). */
+export function defaultStratus(): CloudLayer {
+  return makeCloudLayer({ cover: 22, height: 1800, frequency: 60, amplitude: 60, shading: 0.2 });
+}
+
+/** Low, puffy, self-shaded layer (Bryce cumulus). */
+export function defaultCumulus(): CloudLayer {
+  return makeCloudLayer({ cover: 36, height: 700, frequency: 120, amplitude: 160, shading: 0.6 });
+}
+
 export function defaultSky(): Sky {
   return {
     mode: 'soft',
-    horizonColor: [0.82, 0.86, 0.92],
-    zenithColor: [0.24, 0.42, 0.78],
-    skyDomeColor: [0.55, 0.68, 0.9],
+    horizonColor: [0.8, 0.86, 0.94],
+    zenithColor: [0.22, 0.42, 0.8],
+    skyDomeColor: [0.6, 0.72, 0.92],
     sunColor: [1, 0.96, 0.88],
     sunSize: 30,
     sunGlow: 35,
@@ -36,11 +46,11 @@ export function defaultSky(): Sky {
     fogDensity: 0,
     fogHeight: 4,
     fogColor: [0.9, 0.9, 0.92],
-    shadowIntensity: 75,
-    ambient: 35,
+    shadowIntensity: 72,
+    ambient: 32,
     ambientColor: [0.62, 0.7, 0.85],
-    stratus: makeCloudLayer({ cover: 25, height: 1800, frequency: 60, amplitude: 60, shading: 0.2 }),
-    cumulus: makeCloudLayer({ cover: 38, height: 700, frequency: 120, amplitude: 160, shading: 0.6 }),
+    stratus: defaultStratus(),
+    cumulus: defaultCumulus(),
     rainbow: false,
   };
 }

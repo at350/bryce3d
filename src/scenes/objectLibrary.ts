@@ -1,26 +1,20 @@
 /**
- * The Objects preset library (ready-made objects and groups). NOTE: foundation stub; the
- * scenes owner expands it (keep the exported names and shapes).
+ * The Objects preset library: ready-made objects and groups. Every build() returns fresh
+ * objects (new ids) around the origin, resting on y = 0 (or floating above it), facing +Z.
  */
-import { createObject } from '@/core/defaults';
-import type { SceneObject } from '@/core/types';
+import { ARCHITECTURE } from './objects/architecture';
+import { GEOMETRIC } from './objects/geometric';
+import { LIGHTS, TERRAINS } from './objects/lightsAndTerrains';
+import { NATURE } from './objects/nature';
+import { SURREAL } from './objects/surreal';
+import type { ObjectPreset } from './objects/types';
 
-export interface ObjectPreset {
-  id: string;
-  name: string;
-  category: string;
-  description?: string;
-  /** Build fresh objects (new ids) positioned around the origin, resting on y = 0. */
-  build: () => SceneObject[];
+export type { ObjectPreset } from './objects/types';
+
+export const OBJECT_CATEGORIES: string[] = ['Geometric', 'Architecture', 'Nature', 'Surreal', 'Lights', 'Terrains'];
+
+export const OBJECT_PRESETS: ObjectPreset[] = [...GEOMETRIC, ...ARCHITECTURE, ...NATURE, ...SURREAL, ...LIGHTS, ...TERRAINS];
+
+export function getObjectPreset(id: string): ObjectPreset | undefined {
+  return OBJECT_PRESETS.find((p) => p.id === id);
 }
-
-export const OBJECT_CATEGORIES: string[] = ['Geometric'];
-
-export const OBJECT_PRESETS: ObjectPreset[] = [
-  {
-    id: 'monolith',
-    name: 'Monolith',
-    category: 'Geometric',
-    build: () => [createObject('cube', { name: 'Monolith', transform: { position: [0, 6, 0], rotation: [0, 0, 0], scale: [1.2, 6, 0.3] } })],
-  },
-];

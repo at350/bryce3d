@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>UI dev: icon gallery</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #26272b; color: #ddd; font: 12px Helvetica, Arial, sans-serif; }
+      h2 { margin: 18px 0 8px; font-size: 14px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+      .cell { display: grid; justify-items: center; gap: 4px; padding: 8px 4px; border-radius: 8px; background: linear-gradient(180deg, #f6f7f9, #cfd3da); color: #222; }
+      .cell span { font-size: 10px; text-align: center; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./ui-icons.tsx"></script>
+  </body>
+</html>

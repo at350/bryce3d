@@ -47,4 +47,33 @@ export type IconKind =
   | 'solid'
   | 'selectAll'
   | 'prev'
-  | 'next';
+  | 'next'
+  // added by the ui module
+  | 'stop'
+  | 'selectNone'
+  | 'family'
+  | 'objectList'
+  | 'depthCue'
+  | 'resetView'
+  | 'viewCamera'
+  | 'viewDirector'
+  | 'viewTop'
+  | 'viewBottom'
+  | 'viewLeft'
+  | 'viewRight'
+  | 'viewFront'
+  | 'viewBack';
+
+/** All kinds, for tests and the icon gallery. */
+export const ALL_ICON_KINDS: IconKind[] = [
+  'sphere', 'cube', 'cylinder', 'cone', 'torus', 'pyramid', 'disc', 'square',
+  'water', 'ground', 'cloud', 'terrain', 'lattice', 'stone', 'tree',
+  'radialLight', 'spotLight', 'squareSpotLight', 'parallelLight',
+  'tallCylinder', 'flatSphere', 'tallCube', 'flatCube',
+  'materials', 'editTerrain', 'editObject', 'resize', 'rotate', 'reposition', 'align', 'randomize',
+  'duplicate', 'delete', 'land', 'render', 'renderResume', 'renderClear', 'dice',
+  'sun', 'moon', 'stars', 'cloudCover', 'fog', 'haze', 'shadows', 'skySoft', 'skyDarker', 'skyCustom', 'skyOff',
+  'camera', 'director', 'eye', 'library', 'zoomIn', 'zoomOut', 'frame', 'wireframe', 'solid', 'selectAll', 'prev', 'next',
+  'stop', 'selectNone', 'family', 'objectList', 'depthCue', 'resetView',
+  'viewCamera', 'viewDirector', 'viewTop', 'viewBottom', 'viewLeft', 'viewRight', 'viewFront', 'viewBack',
+];

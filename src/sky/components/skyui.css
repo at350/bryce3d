@@ -1,0 +1,24 @@
+/* Shared sky UI pieces (palette + Sky Lab). Colors come from the skin variables. */
+.sky-paint { display: block; }
+
+.sky-colorbar {
+  display: block;
+  width: 100%;
+  height: 8px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 1px 0 rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+}
+.sky-colorbar:hover { filter: brightness(1.08); }
+.sky-colorbar:focus-visible { outline: 2px solid var(--accent, #2f5fd0); outline-offset: 1px; }
+.sky-colorbar.is-open { box-shadow: 0 0 0 2px var(--accent, #2f5fd0); }
+.sky-colorbar:disabled { opacity: 0.4; cursor: default; }
+
+.sky-sunball { position: relative; flex: none; border-radius: 50%; }
+.sky-sunball .bk-trackball { position: relative; display: block; border-radius: 50%; cursor: grab; }
+.sky-sunball .bk-trackball.is-dragging { cursor: grabbing; }
+.sky-sunball .bk-trackball__overlay { position: absolute; inset: 0; pointer-events: none; display: grid; place-items: center; }
+/* The painted dome sits inside the kit ball's rim (r = 45 of 100). */
+.sky-sunball__canvas { border-radius: 50%; }

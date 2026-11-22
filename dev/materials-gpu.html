@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Materials: ray-traced preset sheet (dev)</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #2b2d31; color: #e8eaee; font: 12px system-ui, sans-serif; }
+      h2 { margin: 18px 0 8px; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: #aeb4bd; }
+      .row { display: flex; flex-wrap: wrap; gap: 10px; }
+      figure { margin: 0; text-align: center; }
+      canvas { display: block; border-radius: 6px; box-shadow: 0 0 0 1px #000; background: #111; }
+      figcaption { margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #stats { color: #9aa1ab; }
+    </style>
+  </head>
+  <body>
+    <div id="stats">rendering…</div>
+    <div id="root"></div>
+    <script type="module">
+      import { MATERIAL_CATEGORIES, presetsInCategory } from '/src/materials/presets.ts';
+      import { materialPreviewScene } from '/src/materials/previewScene.ts';
+      import { getRenderer } from '/src/render/index.ts';
+
+      const params = new URLSearchParams(location.search);
+      const size = Number(params.get('size') || 104);
+      const only = params.get('cat');
+      const quality = params.get('quality') || 'icon';
+      const root = document.getElementById('root');
+      const renderer = getRenderer();
+      const t0 = performance.now();
+      let count = 0;
+      const jobs = [];
+      for (const cat of MATERIAL_CATEGORIES.filter((c) => !only || c.toLowerCase().startsWith(only.toLowerCase()))) {
+        const h = document.createElement('h2');
+        h.textContent = cat;
+        const row = document.createElement('div');
+        row.className = 'row';
+        for (const p of presetsInCategory(cat)) {
+          const fig = document.createElement('figure');
+          fig.style.width = `${size}px`;
+          const c = document.createElement('canvas');
+          c.width = c.height = size;
+          c.style.width = c.style.height = `${size}px`;
+          const cap = document.createElement('figcaption');
+          cap.textContent = p.name;
+          fig.append(c, cap);
+          row.append(fig);
+          jobs.push({ p, c });
+        }
+        root.append(h, row);
+      }
+      for (const { p, c } of jobs) {
+        await renderer.preview(materialPreviewScene(p.material, { shape: p.preview ?? 'sphere' }), c, { width: size, height: size, quality, key: `sheet-${p.id}` });
+        count++;
+      }
+      document.getElementById('stats').textContent = `${count} presets ray-traced in ${Math.round(performance.now() - t0)} ms (${size}px, ${quality}); renderer supported: ${renderer.supported}`;
+      window.__done = true;
+    </script>
+  </body>
+</html>

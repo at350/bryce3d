@@ -9,6 +9,9 @@ import './ui/kit/kit.css';
 
 bootScene();
 
+// Apply the saved skin before the first paint (App keeps it in sync afterwards).
+document.body.classList.add(`skin-${useStore.getState().ui.skin}`);
+
 // Debug/automation handle (used by scripts/shot.mjs and handy in the console).
 (window as unknown as { __bryce: unknown }).__bryce = { store: useStore, renderer: getRenderer() };
 

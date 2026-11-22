@@ -1,0 +1,145 @@
+/* Sky Lab room. Skin variables keep it in step with bryce5 / bryce2 / bryce7. */
+.skylab .bk-lab__body { overflow: hidden; }
+
+.skylab__body {
+  display: grid;
+  grid-template-columns: minmax(440px, 1fr) minmax(360px, 1.05fr);
+  grid-template-rows: minmax(0, 1fr) 58px;
+  gap: 12px 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 14px 18px 0;
+  box-sizing: border-box;
+}
+.skylab__left { min-height: 0; overflow: auto; padding: 2px 6px 8px 2px; }
+.skylab__right { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.skylab__hint {
+  grid-column: 1 / -1;
+  align-self: center;
+  padding-right: 150px;
+  font-size: 12px;
+  color: var(--desk-ink-hover, #b9bec8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header tools */
+.skylab__tools { display: flex; align-items: center; gap: 4px; }
+.skylab__toolsep { width: 1px; height: 22px; margin: 0 6px; background: rgba(0, 0, 0, 0.18); box-shadow: 1px 0 0 rgba(255, 255, 255, 0.5); }
+
+/* Panels */
+.skylab__panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-content: start; }
+.skylab__panel, .skylab__presets {
+  border-radius: 10px;
+  background: var(--panel-v, linear-gradient(#fbfbfc, #c9cdd4));
+  box-shadow: var(--panel-shadow, 0 10px 28px rgba(0, 0, 0, 0.5));
+  border: 1px solid var(--metal-edge, #747a85);
+}
+.skylab__panel { padding: 8px 12px 10px; }
+.skylab__panel--wide, .skylab__panel--cloud { grid-column: 1 / -1; }
+.skylab__panel.is-off .skylab__panelbody { opacity: 0.5; }
+.skylab__panelhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.skylab__panelhead h2, .skylab__panelhead .bk-toggle__label { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: 0.02em; color: var(--ink, #2a2c30); }
+.skylab__panelextra { margin-left: auto; }
+.skylab__panelbody { display: flex; flex-direction: column; gap: 7px; }
+.skylab__blurb { font-size: 11px; color: var(--ink-soft, #5b5e66); }
+.skylab__note { margin: 2px 0 0; font-size: 11px; line-height: 1.35; color: var(--ink-soft, #5b5e66); }
+.skylab__fields { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.skylab__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.skylab__row--tight { gap: 6px; }
+.skylab__swatch { display: flex; align-items: center; }
+
+/* Sun & Moon */
+.skylab__suncontrols { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.skylab__ballwrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.skylab__balllabel { font-size: 11px; color: var(--ink-soft, #5b5e66); text-transform: capitalize; }
+.skylab__chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 330px; }
+.skylab__chip.bk-button { font-size: 11px; padding: 2px 8px; }
+.skylab__moon { display: flex; gap: 12px; align-items: flex-start; }
+.skylab__moonart { border-radius: 8px; flex: none; }
+
+/* Cloud Cover */
+.skylab__cloud { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.skylab__cloudtex { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.skylab__texwrap { border-radius: 6px; overflow: hidden; line-height: 0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.6); }
+.skylab__texbtns { display: flex; gap: 4px; }
+.skylab__round { padding: 0; border: 0; background: none; cursor: pointer; line-height: 0; border-radius: 50%; }
+.skylab__round:focus-visible { outline: 2px solid var(--accent, #2f5fd0); }
+.skylab__knobwrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.skylab__knoblabel { font-size: 10px; color: var(--ink-soft, #5b5e66); text-transform: uppercase; letter-spacing: 0.05em; }
+.skylab__knob { cursor: move; touch-action: none; border-radius: 50%; }
+.skylab__knob:focus-visible { outline: 2px solid var(--accent, #2f5fd0); outline-offset: 2px; }
+.skylab__knobface { fill: var(--metal, #c9cbcf); stroke: rgba(0, 0, 0, 0.35); stroke-width: 1.5; }
+.skylab__knobring { fill: rgba(0, 0, 0, 0.08); stroke: rgba(255, 255, 255, 0.7); stroke-width: 1; }
+.skylab__knobtick { stroke: var(--ink-soft, #5b5e66); stroke-width: 2; stroke-linecap: round; }
+.skylab__knobarrow { stroke: var(--accent, #2f5fd0); stroke-width: 3; stroke-linecap: round; }
+.skylab__knobdot { fill: var(--accent, #2f5fd0); stroke: #fff; stroke-width: 1.5; }
+
+/* Atmosphere */
+.skylab__modes { display: flex; gap: 10px; flex-wrap: wrap; }
+.skylab__modetile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink, #2a2c30);
+  cursor: pointer;
+}
+.skylab__modetile canvas { border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3); }
+.skylab__modetile:hover { background: rgba(255, 255, 255, 0.5); }
+.skylab__modetile.is-active { background: rgba(255, 255, 255, 0.75); box-shadow: 0 0 0 2px var(--accent, #2f5fd0); font-weight: 700; }
+
+/* Preview */
+.skylab__preview { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.skylab__frame {
+  position: relative;
+  /* 4:3 at whatever width leaves room for the preset drawer below. */
+  width: min(100%, calc((100vh - 400px) * 4 / 3));
+  min-width: 240px;
+  aspect-ratio: 4 / 3;
+  margin: 0 auto;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.3);
+  cursor: grab;
+  touch-action: none;
+}
+.skylab__frame:active { cursor: grabbing; }
+.skylab__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.skylab__canvas--full { opacity: 0; transition: opacity 0.18s ease-out; }
+.skylab__canvas--full.is-ready { opacity: 1; }
+.skylab__nogl { position: absolute; inset: auto 0 0; padding: 6px 10px; font-size: 12px; color: #fff; background: rgba(0, 0, 0, 0.6); }
+.skylab__previewbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.skylab__previewbar .bk-button--ghost { color: var(--desk-ink-hover, #b9bec8); }
+.skylab__previewbar .bk-button--ghost:disabled { color: var(--desk-ink, #7d828d); }
+.skylab__segment { display: flex; gap: 4px; }
+
+/* Presets */
+.skylab__presets { flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; }
+.skylab__presethead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.skylab__presethead h2 { margin: 0; font-size: 13px; color: var(--ink, #2a2c30); }
+.skylab__cats { display: flex; flex-wrap: wrap; gap: 2px; }
+.skylab__cat { font: inherit; font-size: 11px; padding: 2px 7px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft, #5b5e66); cursor: pointer; }
+.skylab__cat:hover { background: rgba(255, 255, 255, 0.5); }
+.skylab__cat.is-active { background: var(--accent, #2f5fd0); color: #fff; }
+.skylab__tiles { flex: 1 1 auto; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; align-content: start; padding: 2px; }
+.skylab__tile { display: flex; flex-direction: column; gap: 3px; padding: 3px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 10.5px; line-height: 1.2; color: var(--ink, #2a2c30); text-align: center; cursor: pointer; }
+.skylab__tile img { width: 100%; aspect-ratio: 4 / 3; border-radius: 5px; display: block; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.skylab__tile:hover { background: rgba(255, 255, 255, 0.7); }
+.skylab__tile:focus-visible { outline: 2px solid var(--accent, #2f5fd0); }
+.skylab__tile.is-current { background: rgba(255, 255, 255, 0.8); box-shadow: 0 0 0 2px var(--accent, #2f5fd0); font-weight: 700; }
+.skylab__presetinfo { margin: 0; min-height: 30px; font-size: 11.5px; line-height: 1.3; color: var(--ink-soft, #5b5e66); }
+.skylab__presetinfo b { color: var(--ink, #2a2c30); margin-right: 4px; }
+
+@media (max-width: 1100px) {
+  .skylab__body { grid-template-columns: minmax(400px, 1fr) minmax(320px, 0.9fr); gap: 10px 12px; padding: 10px 12px 4px; }
+  .skylab__panels { grid-template-columns: 1fr; }
+}

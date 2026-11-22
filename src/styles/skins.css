@@ -1,0 +1,187 @@
+/*
+ * Skins. Every color in the chrome comes from these custom properties. The skin class is
+ * set on <body> (so popovers in portals inherit it) and on .app.
+ *   bryce5 (default): silver/white metal, glossy blue balls, dark charcoal desktop
+ *   bryce2: warm gray metal, orange arrows and teal balls (the Kai's Power Tools era)
+ *   bryce7: gray-green "sage" metal
+ */
+:root,
+.skin-bryce5 {
+  --desk: #1f2024;
+  --desk-2: #34363c;
+  --desk-ink: #7d828d;
+  --desk-ink-hover: #b9bec8;
+  --desk-ink-active: #ffffff;
+
+  --metal-hi: #ffffff;
+  --metal: #e6e8ec;
+  --metal-mid: #d2d5db;
+  --metal-lo: #a9aeb7;
+  --metal-edge: #747a85;
+  --panel: linear-gradient(90deg, #f7f8fa 0%, #e2e5ea 45%, #cfd3da 100%);
+  --panel-v: linear-gradient(180deg, #fbfbfc 0%, #e4e6ea 55%, #c9cdd4 100%);
+  --panel-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+
+  --ink: #1b1e24;
+  --ink-soft: #4d535d;
+  --ink-faint: #868c96;
+  --field: #fafbfc;
+  --field-ink: #101217;
+  --field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+
+  --accent: #2446dc;
+  --accent-hi: #7e98ff;
+  --accent-lo: #0c1b74;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(36, 70, 220, 0.16);
+  --focus: #3d6bff;
+
+  --ball-hi: #dce6ff;
+  --ball-mid: #2a4fe2;
+  --ball-lo: #07114a;
+  --arrow-hi: #ffffff;
+  --arrow-mid: #c7ccd5;
+  --arrow-lo: #6f7682;
+  --tb-hi: #ffffff;
+  --tb-mid: #d4d8df;
+  --tb-lo: #7d838e;
+  --tba-hi: #8aa2ff;
+  --tba-mid: #2647dc;
+  --tba-lo: #0a1660;
+
+  --menu-bg: linear-gradient(180deg, #f4f5f7, #e3e5e9);
+  --menu-ink: #0f1115;
+  --menu-hi-bg: linear-gradient(180deg, #4a4f59, #2b2f36);
+  --menu-hi-ink: #ffffff;
+  --menu-rule: #a3a8b1;
+
+  --shelf-far: #c7cbd2;
+  --shelf-near: #fdfdfe;
+  --shelf-lip-hi: #ffffff;
+  --shelf-lip-lo: #9ea3ac;
+
+  --title-glow: rgba(140, 170, 255, 0.35);
+  --danger: #d2321f;
+  --ok: #2446dc;
+  --paper: #d8d9d4;
+}
+
+.skin-bryce2 {
+  --desk: #22201e;
+  --desk-2: #3b3733;
+  --desk-ink: #8a847b;
+  --desk-ink-hover: #cdc5b9;
+  --desk-ink-active: #fff7ea;
+
+  --metal-hi: #fbf8f3;
+  --metal: #dcd6cc;
+  --metal-mid: #c8c1b5;
+  --metal-lo: #a0988b;
+  --metal-edge: #6f685e;
+  --panel: linear-gradient(90deg, #f1ece4 0%, #d8d1c6 50%, #c2baad 100%);
+  --panel-v: linear-gradient(180deg, #f3eee6 0%, #d9d2c7 55%, #bdb4a6 100%);
+  --panel-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.45) inset;
+
+  --ink: #26211b;
+  --ink-soft: #5b5248;
+  --ink-faint: #8f877b;
+  --field: #fbf8f2;
+  --field-ink: #1d1914;
+  --field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+
+  --accent: #0f8a8c;
+  --accent-hi: #6fd6d2;
+  --accent-lo: #04393b;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(15, 138, 140, 0.18);
+  --focus: #e8672a;
+
+  --ball-hi: #c9fffb;
+  --ball-mid: #108e90;
+  --ball-lo: #033233;
+  --arrow-hi: #ffd2b0;
+  --arrow-mid: #e8672a;
+  --arrow-lo: #7a2a08;
+  --tb-hi: #ffe0c8;
+  --tb-mid: #e9692b;
+  --tb-lo: #7d2c09;
+  --tba-hi: #9ff0ec;
+  --tba-mid: #0f8a8c;
+  --tba-lo: #03393a;
+
+  --menu-bg: linear-gradient(180deg, #f5f1ea, #e2dbcf);
+  --menu-ink: #1d1914;
+  --menu-hi-bg: linear-gradient(180deg, #13898b, #0a5f61);
+  --menu-hi-ink: #ffffff;
+  --menu-rule: #ab9f8e;
+
+  --shelf-far: #bfb6a8;
+  --shelf-near: #f8f4ee;
+  --shelf-lip-hi: #fffaf2;
+  --shelf-lip-lo: #968c7e;
+
+  --title-glow: rgba(232, 103, 42, 0.35);
+  --danger: #c9361d;
+  --ok: #0f8a8c;
+  --paper: #d6d4cd;
+}
+
+.skin-bryce7 {
+  --desk: #1d211e;
+  --desk-2: #323a34;
+  --desk-ink: #7c877e;
+  --desk-ink-hover: #b8c4b9;
+  --desk-ink-active: #f4fbf3;
+
+  --metal-hi: #f6f9f3;
+  --metal: #d5dccf;
+  --metal-mid: #c2cabb;
+  --metal-lo: #98a291;
+  --metal-edge: #66705f;
+  --panel: linear-gradient(90deg, #edf1e9 0%, #d3dacd 50%, #bcc5b5 100%);
+  --panel-v: linear-gradient(180deg, #f0f4ec 0%, #d5dccf 55%, #b7c0af 100%);
+  --panel-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.45) inset;
+
+  --ink: #1c231d;
+  --ink-soft: #4b574c;
+  --ink-faint: #849185;
+  --field: #f8fbf6;
+  --field-ink: #141a15;
+  --field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+
+  --accent: #4a7d5c;
+  --accent-hi: #a8d8b2;
+  --accent-lo: #173523;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(74, 125, 92, 0.18);
+  --focus: #5f9a6d;
+
+  --ball-hi: #e2f5dc;
+  --ball-mid: #5d9455;
+  --ball-lo: #14301a;
+  --arrow-hi: #ffffff;
+  --arrow-mid: #c2cbbd;
+  --arrow-lo: #677262;
+  --tb-hi: #ffffff;
+  --tb-mid: #cdd5c7;
+  --tb-lo: #74806e;
+  --tba-hi: #b5e0ad;
+  --tba-mid: #4c8a4a;
+  --tba-lo: #163318;
+
+  --menu-bg: linear-gradient(180deg, #f1f5ee, #dde4d8);
+  --menu-ink: #141a15;
+  --menu-hi-bg: linear-gradient(180deg, #4e7a55, #2e4f35);
+  --menu-hi-ink: #ffffff;
+  --menu-rule: #9ca796;
+
+  --shelf-far: #bac3b2;
+  --shelf-near: #f7faf4;
+  --shelf-lip-hi: #ffffff;
+  --shelf-lip-lo: #929d8b;
+
+  --title-glow: rgba(150, 210, 160, 0.3);
+  --danger: #c23a26;
+  --ok: #4a7d5c;
+  --paper: #d6d9d1;
+}

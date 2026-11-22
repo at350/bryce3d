@@ -1,0 +1,130 @@
+/* The Working window (viewport module). */
+
+.bv-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: #dcdbd5;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  contain: strict;
+}
+
+.bv-render {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+}
+
+.bv-render canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.bv-gl,
+.bv-gl canvas,
+.bv-overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.bv-gl {
+  pointer-events: none;
+}
+
+.bv-overlay {
+  touch-action: none;
+  outline: none;
+}
+
+.bv-badge {
+  position: absolute;
+  pointer-events: none;
+  font: 600 9.5px/1.2 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(28, 29, 33, 0.55);
+  white-space: nowrap;
+}
+
+.bv-badge__dim {
+  color: rgba(28, 29, 33, 0.38);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.bv-badge__mode {
+  color: rgba(200, 30, 20, 0.85);
+}
+
+.bv-progress {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 5px 4px 11px;
+  border-radius: 999px;
+  background: rgba(18, 20, 26, 0.72);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: #f3f4f6;
+  font: 500 11px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+.bv-progress__track {
+  width: 120px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.bv-progress__fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #4f7dff, #a9c6ff);
+  transition: width 140ms linear;
+}
+
+.bv-progress__pct {
+  min-width: 30px;
+  padding-right: 4px;
+}
+
+.bv-progress button {
+  font: inherit;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.bv-progress button:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.bv-error {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 360px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2a2c30;
+  font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  text-align: center;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}

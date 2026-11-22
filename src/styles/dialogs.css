@@ -1,0 +1,79 @@
+/* Contents of the ui dialogs (Attributes, Render Settings, About, Shortcuts). */
+.dlg-section { display: grid; gap: 10px; padding: 4px 0 12px; }
+.dlg-section + .dlg-section { border-top: 1px solid rgba(0, 0, 0, 0.1); padding-top: 12px; }
+.dlg-heading { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+.dlg-row { display: flex; align-items: center; gap: 12px; }
+.dlg-row--wrap { flex-wrap: wrap; row-gap: 8px; }
+.dlg-grid { display: grid; gap: 8px; }
+.dlg-note { margin: 0; font-size: 11.5px; color: var(--ink-faint); }
+.dlg-empty { margin: 6px 0; line-height: 1.5; }
+.dlg-field { display: grid; gap: 5px; font-size: 11px; color: var(--ink-soft); }
+.dlg-text {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--field);
+  color: var(--field-ink);
+  box-shadow: var(--field-shadow);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dlg-text:focus { outline: 2px solid var(--focus); }
+.dlg-tabs { margin: 2px 0 0; border-bottom: 1px solid rgba(0, 0, 0, 0.15); width: 100%; }
+.dlg-tabs .bk-tab { font-size: 13px; }
+.dlg-tabpanel { padding-top: 12px; min-height: 160px; }
+
+.attr-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.attr-head__name { font-size: 16px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attr-head__more { font-size: 11px; color: var(--ink-faint); }
+.vec-row { display: grid; grid-template-columns: 64px repeat(3, 1fr); gap: 10px; align-items: center; }
+.vec-row__label { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.family-row { display: flex; gap: 6px; }
+.family-chip {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: inset 0 -3px 4px rgba(0, 0, 0, 0.3), inset 0 2px 2px rgba(255, 255, 255, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.family-chip.is-on { box-shadow: 0 0 0 2px var(--metal-hi), 0 0 0 4px var(--accent), inset 0 -3px 4px rgba(0, 0, 0, 0.3); }
+.family-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+.size-groups { display: grid; gap: 6px; }
+.size-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.size-group__title { width: 52px; font-size: 11px; font-weight: 800; color: var(--ink-soft); }
+.size-chip { font-variant-numeric: tabular-nums; }
+
+.about { display: grid; gap: 10px; font-size: 13px; line-height: 1.5; }
+.about p { margin: 0; }
+.about__hero { display: flex; justify-content: center; }
+.about__hero svg { border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
+.about__legal { font-size: 11.5px; color: var(--ink-soft); padding: 8px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.05); }
+.about__links { text-align: center; }
+.about a { color: var(--accent); font-weight: 700; }
+
+.shortcuts { column-count: 2; column-gap: 26px; }
+.shortcuts__group { break-inside: avoid; margin-bottom: 14px; }
+.shortcuts__group dl { margin: 6px 0 0; display: grid; gap: 4px; }
+.shortcuts__row { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 10px; align-items: baseline; font-size: 12px; }
+.shortcuts__row dt { white-space: nowrap; }
+.shortcuts__row dd { margin: 0; color: var(--ink-soft); }
+.shortcuts__or { font-size: 10px; color: var(--ink-faint); }
+.shortcuts kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--metal-edge);
+  background: linear-gradient(180deg, var(--metal-hi), var(--metal-mid));
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .shortcuts { column-count: 1; }
+}

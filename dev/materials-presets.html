@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Materials: preset contact sheet (dev)</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #2b2d31; color: #e8eaee; font: 12px system-ui, sans-serif; }
+      h2 { margin: 18px 0 8px; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: #aeb4bd; }
+      .row { display: flex; flex-wrap: wrap; gap: 10px; }
+      figure { margin: 0; width: 112px; text-align: center; }
+      canvas { display: block; border-radius: 6px; box-shadow: 0 0 0 1px #000; }
+      figcaption { margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .swatch { margin-top: 3px; }
+      #stats { color: #9aa1ab; }
+    </style>
+  </head>
+  <body>
+    <div id="stats"></div>
+    <div id="root"></div>
+    <script type="module">
+      import { MATERIAL_CATEGORIES, presetsInCategory } from '/src/materials/presets.ts';
+      import { renderMaterialPixels } from '/src/materials/cpuPreview.ts';
+      import { randomMaterial } from '/src/materials/random.ts';
+
+      const root = document.getElementById('root');
+      const params = new URLSearchParams(location.search);
+      const size = Number(params.get('size') || 112);
+      const forced = params.get('shape');
+      const draw = (m, label, preferred) => {
+        const shape = forced || preferred || 'sphere';
+        const fig = document.createElement('figure');
+        fig.style.width = `${size}px`;
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        c.getContext('2d').putImageData(new ImageData(renderMaterialPixels(m, size, size, { shape, maxOctaves: 7 }), size, size), 0, 0);
+        const cap = document.createElement('figcaption');
+        cap.textContent = label;
+        fig.append(c, cap);
+        return fig;
+      };
+      const t0 = performance.now();
+      let count = 0;
+      const only = params.get('cat');
+      const sections = params.get('random') ? ['Random'] : MATERIAL_CATEGORIES.filter((c) => !only || c.toLowerCase().startsWith(only.toLowerCase()));
+      for (const cat of sections) {
+        const h = document.createElement('h2');
+        h.textContent = cat;
+        const row = document.createElement('div');
+        row.className = 'row';
+        if (cat === 'Random') {
+          const start = Number(params.get('seed') || 1);
+          for (let s = start; s < start + 48; s++) {
+            const m = randomMaterial(s);
+            row.append(draw(m, `${s}: ${m.name}`));
+            count++;
+          }
+        } else {
+          for (const p of presetsInCategory(cat)) {
+            row.append(draw(p.material, p.name, p.preview));
+            count++;
+          }
+        }
+        root.append(h, row);
+      }
+      document.getElementById('stats').textContent = `${count} materials in ${Math.round(performance.now() - t0)} ms (${size}px, ${forced || 'preset shapes'})`;
+      window.__done = true;
+    </script>
+  </body>
+</html>

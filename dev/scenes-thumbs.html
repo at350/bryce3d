@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Library thumbnails (scenes module dev harness)</title>
+    <style>
+      body { margin: 12px; background: #202226; color: #d8dade; font: 12px system-ui, sans-serif; }
+      h2 { margin: 14px 0 6px; font-size: 13px; color: #fff; }
+      .grid { display: flex; flex-wrap: wrap; gap: 6px; }
+      figure { margin: 0; width: 132px; }
+      img, .ph { width: 132px; height: 99px; object-fit: cover; display: block; background: #111; border-radius: 3px; }
+      figure.square img, figure.square .ph { height: 132px; }
+      figcaption { margin-top: 2px; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    </style>
+  </head>
+  <body>
+    <div id="out"></div>
+    <script type="module" src="./scenes-thumbs.ts"></script>
+  </body>
+</html>

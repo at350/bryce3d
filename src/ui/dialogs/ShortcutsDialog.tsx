@@ -1,31 +1,34 @@
+/** Help > Keyboard Shortcuts: the full list, grouped. */
 import { useStore } from '@/core/store';
 import { Dialog } from '@/ui/kit';
-
-const SHORTCUTS: [string, string][] = [
-  ['Ctrl/Cmd + R', 'Render'],
-  ['Ctrl/Cmd + Z', 'Undo'],
-  ['Shift + Ctrl/Cmd + Z', 'Redo'],
-  ['Ctrl/Cmd + D', 'Duplicate'],
-  ['Delete', 'Delete selection'],
-  ['Ctrl/Cmd + 1 / 2 / 3', 'Create / Edit / Sky & Fog palette'],
-  ['Ctrl/Cmd + M', 'Materials Lab'],
-  ['Ctrl/Cmd + E', 'Edit selected object'],
-  ['Esc', 'Deselect / close'],
-];
+import { SHORTCUT_GROUPS } from '../shortcutKeys';
 
 export function ShortcutsDialog() {
+  const close = () => useStore.getState().closeDialog();
   return (
-    <Dialog title="Keyboard Shortcuts" onClose={() => useStore.getState().closeDialog()}>
-      <table>
-        <tbody>
-          {SHORTCUTS.map(([k, v]) => (
-            <tr key={k}>
-              <td style={{ paddingRight: 16 }}>{k}</td>
-              <td>{v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <Dialog title="Keyboard Shortcuts" width={620} onClose={close} onConfirm={close}>
+      <div className="shortcuts">
+        {SHORTCUT_GROUPS.map((g) => (
+          <section key={g.title} className="shortcuts__group">
+            <h3 className="dlg-heading">{g.title}</h3>
+            <dl>
+              {g.items.map(([keys, what]) => (
+                <div key={keys + what} className="shortcuts__row">
+                  <dt>
+                    {keys.split('  or  ').map((k, i) => (
+                      <span key={k}>
+                        {i > 0 && <span className="shortcuts__or"> or </span>}
+                        <kbd>{k}</kbd>
+                      </span>
+                    ))}
+                  </dt>
+                  <dd>{what}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
+      </div>
     </Dialog>
   );
 }

@@ -1,41 +1,22 @@
-/** Create palette: one click adds an object. NOTE: foundation version; the ui owner restyles it. */
-import { OBJECT_LABELS } from '@/core/objects';
-import { useStore } from '@/core/store';
-import type { ObjectType } from '@/core/types';
+/** Create palette: one click adds an object in front of the camera, resting on the ground, selected. */
 import { Icon3D, IconButton } from '@/ui/kit';
-import type { IconKind } from '@/ui/kit';
-
-interface CreateItem {
-  kind: IconKind;
-  type: ObjectType;
-  label: string;
-  scale?: [number, number, number];
-}
-
-const ITEMS: CreateItem[] = [
-  { kind: 'water', type: 'water', label: 'Water Plane' },
-  { kind: 'cloud', type: 'cloud', label: 'Cloud Plane' },
-  { kind: 'ground', type: 'ground', label: 'Ground Plane' },
-  { kind: 'terrain', type: 'terrain', label: 'Terrain' },
-  { kind: 'lattice', type: 'lattice', label: 'Symmetrical Lattice' },
-  { kind: 'stone', type: 'stone', label: 'Stone' },
-  { kind: 'tree', type: 'tree', label: 'Tree' },
-  ...(['sphere', 'cylinder', 'cube', 'torus', 'cone', 'pyramid', 'disc', 'square'] as const).map((t) => ({ kind: t, type: t, label: OBJECT_LABELS[t] })),
-  { kind: 'radialLight', type: 'radialLight', label: 'Radial Light' },
-  { kind: 'spotLight', type: 'spotLight', label: 'Spotlight' },
-  { kind: 'squareSpotLight', type: 'squareSpotLight', label: 'Square Spotlight' },
-  { kind: 'parallelLight', type: 'parallelLight', label: 'Parallel Light' },
-];
+import { createFromItem } from '../actions';
+import { CREATE_GROUP_LABELS, groupedCreateItems } from '../createItems';
 
 export function CreatePalette() {
-  const create = useStore((s) => s.createObject);
   return (
-    <div className="palette-row">
-      {ITEMS.map((it) => (
-        <IconButton key={it.label} hint={`Create ${it.label}`} onClick={() => create(it.type)}>
-          <Icon3D kind={it.kind} />
-        </IconButton>
-      ))}
+    <div className="shelf">
+      <div className="shelf__row">
+        {groupedCreateItems().map(({ group, items }) => (
+          <div key={group} className="shelf__group" role="group" aria-label={CREATE_GROUP_LABELS[group]}>
+            {items.map((it) => (
+              <IconButton key={it.id} hint={`Create ${it.label}`} size={38} onClick={() => createFromItem(it)}>
+                <Icon3D kind={it.kind} size={34} />
+              </IconButton>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

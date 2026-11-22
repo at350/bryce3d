@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sky presets (dev harness)</title>
+    <style>
+      body { margin: 0; padding: 12px; background: #1f2024; color: #ccd; font: 12px system-ui, sans-serif; }
+      h1 { font-size: 14px; margin: 0 0 10px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, 240px); gap: 10px; }
+      figure { margin: 0; }
+      canvas { display: block; width: 240px; height: 180px; background: #000; border-radius: 4px; }
+      figcaption { margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      figcaption b { color: #fff; }
+      .painted canvas { width: 120px; height: 90px; }
+    </style>
+  </head>
+  <body>
+    <h1>Sky presets: ray-traced preview scene (?painted=1 for the CPU swatches, ?cat=Night to filter)</h1>
+    <div class="grid" id="grid"></div>
+    <script type="module">
+      import { getRenderer } from '@/render';
+      import { SKY_PRESETS } from '@/sky/presets';
+      import { skyPreviewScene } from '@/sky/previewScene';
+      import { paintSkyView } from '@/sky/paint/skyView';
+
+      const params = new URLSearchParams(location.search);
+      const painted = params.has('painted');
+      const cat = params.get('cat');
+      const grid = document.getElementById('grid');
+      if (painted) grid.classList.add('painted');
+      const presets = SKY_PRESETS.filter((p) => !cat || p.category === cat);
+      const renderer = getRenderer();
+      for (const p of presets) {
+        const fig = document.createElement('figure');
+        const canvas = document.createElement('canvas');
+        canvas.width = painted ? 120 : 240;
+        canvas.height = painted ? 90 : 180;
+        const cap = document.createElement('figcaption');
+        cap.innerHTML = `<b>${p.name}</b> · ${p.category}`;
+        fig.append(canvas, cap);
+        grid.append(fig);
+        if (painted) paintSkyView(canvas.getContext('2d'), canvas.width, canvas.height, p.sky, { pitch: 6, fov: 62 });
+        else await renderer.preview(skyPreviewScene(p.sky), canvas, { width: 240, height: 180, quality: 'preview', key: `harness:${p.id}` });
+      }
+      window.__done = true;
+    </script>
+  </body>
+</html>
