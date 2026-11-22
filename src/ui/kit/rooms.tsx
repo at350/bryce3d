@@ -1,14 +1,23 @@
 /** LabFrame (full-screen Bryce "room") and Dialog (floating window). */
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { getUiZoom } from '../layoutScale';
 import { GlossBall } from './GlossBall';
 import { useHint } from './hint';
 import { isEditableTarget, isTopLayer, layerDepth, useLayer } from './layers';
 import { Tabs } from './smallControls';
 
-function RoundAction({ hint, glyph, tone, onClick, size = 46, className = '' }: { hint: string; glyph: 'check' | 'cross'; tone: 'accent' | 'metal'; onClick: () => void; size?: number; className?: string }) {
+// A lab can mount after the desktop has already been hidden and the browser has
+// dropped focus. Remember the last focused control so it can be restored later.
+let lastFocused: HTMLElement | null = null;
+const rememberFocus = (e: FocusEvent) => {
+  if (e.target instanceof HTMLElement && e.target !== document.body) lastFocused = e.target;
+};
+if (typeof document !== 'undefined') document.addEventListener('focusin', rememberFocus);
+if (import.meta.hot) import.meta.hot.dispose(() => document.removeEventListener('focusin', rememberFocus));
+
+function RoundAction({ hint, glyph, tone, onClick, size = 46, className = '', disabled = false }: { hint: string; glyph: 'check' | 'cross'; tone: 'accent' | 'metal'; onClick: () => void; size?: number; className?: string; disabled?: boolean }) {
   return (
-    <button type="button" className={`bk-roundaction ${className}`} aria-label={hint} onClick={onClick} {...useHint(hint)}>
+    <button type="button" className={`bk-roundaction ${className}`} aria-label={hint} onClick={onClick} disabled={disabled} {...useHint(hint)}>
       <GlossBall size={size} tone={tone} glyph={glyph} />
     </button>
   );
@@ -20,6 +29,7 @@ export interface LabFrameProps {
   title: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmDisabled?: boolean;
   children: ReactNode;
   tabs?: { id: string; label: string }[];
   tab?: string;
@@ -30,16 +40,22 @@ export interface LabFrameProps {
 }
 
 /** A full-screen room (Materials Lab, Terrain Editor, Sky Lab) with ✗ / ✓ balls at the bottom right. Esc cancels, Enter accepts. */
-export function LabFrame({ title, onConfirm, onCancel, children, tabs, tab, onTab, headerExtra, className = '' }: LabFrameProps) {
+export function LabFrame({ title, onConfirm, onCancel, confirmDisabled = false, children, tabs, tab, onTab, headerExtra, className = '' }: LabFrameProps) {
   const layer = useLayer('lab', onCancel);
+  const ref = useRef<HTMLDivElement>(null);
+  // Capture before React hides the desktop, which otherwise clears browser focus.
+  const previousFocus = useRef(document.activeElement === document.body ? lastFocused : document.activeElement as HTMLElement | null);
+  useModalFocus(ref, layer, true, previousFocus);
   const confirmRef = useRef(onConfirm);
-  useEffect(() => {
+  const disabledRef = useRef(confirmDisabled);
+  useLayoutEffect(() => {
     confirmRef.current = onConfirm;
-  });
+    disabledRef.current = confirmDisabled;
+  }, [onConfirm, confirmDisabled]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented) return;
-      if (!isTopLayer(layer.current) || isEditableTarget(e.target)) return;
+      if (disabledRef.current || !isTopLayer(layer.current) || isEditableTarget(e.target)) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest?.('button, a, [role="slider"], [role="spinbutton"], [role="tab"]')) return;
       e.preventDefault();
@@ -49,7 +65,7 @@ export function LabFrame({ title, onConfirm, onCancel, children, tabs, tab, onTa
     return () => window.removeEventListener('keydown', key);
   }, [layer]);
   return (
-    <div className={`bk-lab ${className}`} role="dialog" aria-modal="true" aria-label={title}>
+    <div ref={ref} tabIndex={-1} className={`bk-lab ${className}`} role="dialog" aria-modal="true" aria-label={title}>
       <header className="bk-lab__header">
         <h1 className="bk-lab__title">{title}</h1>
         {tabs && tab && onTab && <Tabs tabs={tabs} value={tab} onChange={onTab} className="bk-lab__tabs" />}
@@ -58,7 +74,7 @@ export function LabFrame({ title, onConfirm, onCancel, children, tabs, tab, onTa
       <div className="bk-lab__body">{children}</div>
       <footer className="bk-lab__footer">
         <RoundAction hint="Cancel (Esc)" glyph="cross" tone="metal" onClick={onCancel} className="bk-lab__cancel" />
-        <RoundAction hint="Accept (Enter)" glyph="check" tone="accent" onClick={onConfirm} className="bk-lab__confirm" />
+        <RoundAction hint="Accept (Enter)" glyph="check" tone="accent" onClick={onConfirm} disabled={confirmDisabled} className="bk-lab__confirm" />
       </footer>
     </div>
   );
@@ -79,6 +95,40 @@ export interface DialogProps {
 }
 
 const FOCUSABLE = 'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
+/** Focus and contain keyboard navigation while this is the top modal layer. */
+export function useModalFocus(ref: RefObject<HTMLElement | null>, layer: RefObject<number | null>, active = true, previousFocus?: RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    if (!active) return;
+    const previous = previousFocus?.current ?? document.activeElement as HTMLElement | null;
+    ref.current?.focus({ preventScroll: true });
+    const key = (e: KeyboardEvent) => {
+      const root = ref.current;
+      if (e.key !== 'Tab' || !root || !isTopLayer(layer.current)) return;
+      const items = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((n) => n.offsetParent !== null);
+      if (!items.length) { e.preventDefault(); root.focus(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const current = document.activeElement;
+      if (e.shiftKey && (current === first || current === root || !root.contains(current))) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && (current === last || !root.contains(current))) {
+        e.preventDefault(); first.focus();
+      }
+    };
+    window.addEventListener('keydown', key, true);
+    return () => {
+      window.removeEventListener('keydown', key, true);
+      // React may still be unhiding the editor while this layer unmounts.
+      queueMicrotask(() => {
+        if (document.activeElement === document.body || !document.activeElement?.isConnected) {
+          const target = previous?.isConnected ? previous : document.querySelector<HTMLElement>('.bv-root');
+          target?.focus({ preventScroll: true });
+        }
+      });
+    };
+  }, [active, layer, previousFocus, ref]);
+}
 
 /** A floating Bryce window: dark title bar (drag it to move), metal body, Esc to close. */
 export function Dialog({ title, onClose, children, footer, width = 420, onConfirm, onCancel, className = '' }: DialogProps) {

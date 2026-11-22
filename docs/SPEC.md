@@ -131,8 +131,8 @@ Implement `RendererAPI` (`core/renderApi.ts`) as a singleton returned by `getRen
   + drivers + altitude blend), terrains into a `TEXTURE_2D_ARRAY` (R32F/R16F, resampled to ≤ 512²; cache by
   `heights` array identity). Re-pack only what changed (object identity is stable across immutable updates).
 - **Ray tracing (fragment shader)**: analytic intersection in object space for sphere, cube, cylinder,
-  cone, pyramid, disc, square; torus via quartic or SDF march; terrain/lattice by heightfield ray-marching
-  inside the object's box (adaptive step + bisection refinement, honoring clipLow/clipHigh); stone and
+  cone, pyramid, disc, square; torus via quartic or SDF march; terrain/lattice by ordered heightmap-cell traversal
+  inside the object's box (analytic bilinear surface intersections, honoring clipLow/clipHigh); stone and
   tree as noise-displaced SDFs inside their box; infinite water/ground planes; cloud planes as a volumetric
   slab. Correct normals under non-uniform scale (inverse-transpose).
 - **Shading** (Bryce Material Lab semantics, see `Material` in types.ts and guide §"Surface Material

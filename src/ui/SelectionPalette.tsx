@@ -163,10 +163,10 @@ export function SelectionPalette() {
         </div>
         <span className="selection-sep" aria-hidden="true" />
         <div className="selection-nav">
-          <IconButton hint="Previous object (Shift+Tab)" size={30} disabled={!any} onClick={() => cycleSelection(-1)}>
+          <IconButton hint="Previous object ([)" size={30} disabled={!any} onClick={() => cycleSelection(-1)}>
             <Icon3D kind="prev" size={22} />
           </IconButton>
-          <IconButton hint="Next object (Tab)" size={30} disabled={!any} onClick={() => cycleSelection(1)}>
+          <IconButton hint="Next object (])" size={30} disabled={!any} onClick={() => cycleSelection(1)}>
             <Icon3D kind="next" size={22} />
           </IconButton>
           <IconButton hint="Select all (Ctrl+A)" size={32} disabled={!any} onClick={() => useStore.getState().selectAll()}>

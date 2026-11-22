@@ -39,7 +39,6 @@ export class RayTracer {
   private programs!: ProgramSet;
   private noise: WebGLTexture | null = null;
   private vao: WebGLVertexArrayObject | null = null;
-  private readonly terrainFormat: number;
 
   private warm: 'none' | 'pending' | 'done' = 'none';
   private warmFence: WebGLSync | null = null;
@@ -49,13 +48,11 @@ export class RayTracer {
     canvas: HTMLCanvasElement,
     gl: WebGL2RenderingContext,
     accumFormat: number,
-    terrainFormat: number,
     private salt: number,
   ) {
     this.canvas = canvas;
     this.gl = gl;
     this.accumFormat = accumFormat;
-    this.terrainFormat = terrainFormat;
     this.maxSize = Math.min(8192, gl.getParameter(gl.MAX_TEXTURE_SIZE) as number);
     this.init();
   }
@@ -85,8 +82,7 @@ export class RayTracer {
       return { error: 'This GPU/browser cannot render to floating-point targets (EXT_color_buffer_float), which the ray tracer needs.' };
     }
     const floatBlend = !!gl.getExtension('EXT_float_blend');
-    const floatLinear = !!gl.getExtension('OES_texture_float_linear');
-    return { tracer: new RayTracer(canvas, gl, floatBlend ? gl.RGBA32F : gl.RGBA16F, floatLinear ? gl.R32F : gl.R16F, options.salt ?? 0) };
+    return { tracer: new RayTracer(canvas, gl, floatBlend ? gl.RGBA32F : gl.RGBA16F, options.salt ?? 0) };
   }
 
   /** (Re)create every GL resource. Called at construction and after a context restore. */
@@ -95,13 +91,12 @@ export class RayTracer {
     // Extensions are disabled again on a restored context: enable them before allocating.
     gl.getExtension('EXT_color_buffer_float');
     gl.getExtension('EXT_float_blend');
-    gl.getExtension('OES_texture_float_linear');
     this.programs = new ProgramSet(gl, programSources(this.salt));
     this.warm = 'none';
     this.warmFence = null;
     this.warmTarget = null;
     this.noise = createNoiseTexture(gl);
-    this.terrains = new TerrainCache(gl, this.terrainFormat);
+    this.terrains = new TerrainCache(gl);
     this.timer = new GpuTimer(gl);
     this.vao = gl.createVertexArray();
     this.lost = false;

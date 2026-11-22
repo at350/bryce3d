@@ -69,7 +69,7 @@ const clampInt = (v: unknown, def: number, lo: number, hi: number) => {
 };
 
 function qualityUniforms(q: TraceQuality, hasVolumes: boolean): Float32Array {
-  return new Float32Array([q.maxRays, q.maxDepth, q.softShadows ? 1 : 0, q.blur ? 1 : 0, q.volumeSteps, q.terrainSteps, q.sdfSteps, hasVolumes ? 1 : 0]);
+  return new Float32Array([q.maxRays, q.maxDepth, q.softShadows ? 1 : 0, q.blur ? 1 : 0, q.volumeSteps, 0, q.sdfSteps, hasVolumes ? 1 : 0]);
 }
 
 function exposureOf(scene: Scene): number {
@@ -78,7 +78,7 @@ function exposureOf(scene: Scene): number {
 }
 
 function terrainHeights(scene: Scene): Float32Array[] {
-  return scene.objects.filter((o) => o.terrain?.heights instanceof Float32Array).map((o) => o.terrain!.heights);
+  return scene.objects.filter((o) => !o.hidden && (o.type === 'terrain' || o.type === 'lattice') && o.terrain?.heights instanceof Float32Array).map((o) => o.terrain!.heights);
 }
 
 export class WebGLRenderer implements RendererAPI {
@@ -150,6 +150,7 @@ export class WebGLRenderer implements RendererAPI {
     const quality = mainQuality(scene.render);
     const region = keepImage ? regionToPixels(options.region, width, height) : { x: 0, y: 0, w: width, h: height };
     const passes = planPasses(quality.mosaic, quality.samples);
+    this.rt.terrains.pin(terrainHeights(scene));
     this.job = {
       scene,
       width,
@@ -187,6 +188,7 @@ export class WebGLRenderer implements RendererAPI {
       job.state = 'running';
       job.runningSince = performance.now();
     } else return;
+    this.rt.terrains.pin(terrainHeights(job.scene));
     this.emit(true);
     this.schedule();
   }
@@ -196,11 +198,13 @@ export class WebGLRenderer implements RendererAPI {
     if (!job || job.state !== 'running') return;
     job.elapsedMs += performance.now() - job.runningSince;
     job.state = 'paused';
+    this.rt.terrains.pin([]);
     this.emit(true);
   }
 
   clear(): void {
     this.job = null;
+    this.rt.terrains.pin([]);
     this.hasImage = false;
     this.outputCtx?.clearRect(0, 0, this.outputCanvas.width, this.outputCanvas.height);
     if (this.accum && !this.rt.lost) this.rt.clearTarget(this.accum);
@@ -298,8 +302,8 @@ export class WebGLRenderer implements RendererAPI {
       }
     }
     if (!job.keepImage && this.accum) this.rt.clearTarget(this.accum);
-    this.mainScene.update(job.scene);
     this.rt.terrains.pin(terrainHeights(job.scene));
+    this.mainScene.update(job.scene);
     job.uniforms = {
       cam: cameraUniforms(job.scene.camera, w, h),
       sky: computeSkyParams(job.scene.sky, job.scene.camera),
@@ -342,6 +346,7 @@ export class WebGLRenderer implements RendererAPI {
     if (job.passIndex >= job.passes.length) {
       job.elapsedMs += performance.now() - job.runningSince;
       job.state = 'done';
+      this.rt.terrains.pin([]);
       this.emit(true);
     } else this.emit(false);
   }
@@ -375,7 +380,15 @@ export class WebGLRenderer implements RendererAPI {
   private presentMain(job: MainJob, accum: RenderTarget): void {
     if (!this.outputCtx) return;
     this.rt.display(accum, job.width, job.height, exposureOf(job.scene));
+    this.outputCtx.save();
+    if (job.keepImage) {
+      const r = job.region;
+      this.outputCtx.beginPath();
+      this.outputCtx.rect(r.x, job.height - r.y - r.h, r.w, r.h);
+      this.outputCtx.clip();
+    }
     this.rt.copyTo(this.outputCtx, job.width, job.height, job.width, job.height);
+    this.outputCtx.restore();
     this.hasImage = true;
   }
 
@@ -403,6 +416,12 @@ export class WebGLRenderer implements RendererAPI {
     }
     const skyOnly = !!options.skyOnly;
     this.previewScene.update(scene, skyOnly);
+    if (this.previewScene.terrainUnavailable && this.job?.state === 'running') {
+      // All layers may be pinned by the main job. Retry after it advances or
+      // finishes instead of publishing and caching an incomplete sky-only image.
+      this.queue.push(req);
+      return null;
+    }
     const quality = previewQuality(options.quality);
     const camera = options.camera ?? scene.camera;
     return {
@@ -436,13 +455,18 @@ export class WebGLRenderer implements RendererAPI {
         const next = this.queue.shift();
         if (!next) break;
         this.previewJob = this.startPreviewJob(next);
-        if (!this.previewJob) continue;
+        if (!this.previewJob) break;
         this.previewBands.resetGrowth();
       }
       const job = this.previewJob;
       const accum = this.previewAccum;
       if (!accum) break;
       this.previewScene.update(job.scene, job.skyOnly);
+      if (this.previewScene.terrainUnavailable && this.job?.state === 'running') {
+        this.queue.push(job.req);
+        this.previewJob = null;
+        break;
+      }
       const rows = this.previewBands.rowsFor(job.w, job.h - job.rowsDone);
       const cells = rows * job.w;
       const y2 = job.h - job.rowsDone;

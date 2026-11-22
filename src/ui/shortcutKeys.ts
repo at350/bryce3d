@@ -76,8 +76,10 @@ export function resolveShortcut(e: KeyLike): ShortcutAction | null {
       return { type: 'delete' };
     case 'Escape':
       return { type: 'escape' };
-    case 'Tab':
-      return { type: 'cycle', delta: e.shiftKey ? -1 : 1 };
+    case '[':
+      return { type: 'cycle', delta: -1 };
+    case ']':
+      return { type: 'cycle', delta: 1 };
     case '?':
       return { type: 'shortcuts' };
     case '*':
@@ -130,7 +132,8 @@ export const SHORTCUT_GROUPS: { title: string; items: [string, string][] }[] = [
       ['Shift click / Ctrl/⌘ click', 'Add to / toggle in the selection'],
       ['Ctrl/⌘ A', 'Select all'],
       ['Esc', 'Select none'],
-      ['Tab / Shift Tab', 'Next / previous object'],
+      ['[ / ]', 'Previous / next object'],
+      ['Tab / Shift Tab', 'Move keyboard focus forward / backward'],
     ],
   },
   {

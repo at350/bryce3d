@@ -23,6 +23,7 @@ export class SceneGPU {
   lightCount = 0;
   hasVolumes = false;
   dropped = 0;
+  terrainUnavailable = false;
   private lastScene: Scene | null = null;
   private lastSkyOnly = false;
   private lastVersion = -1;
@@ -41,9 +42,17 @@ export class SceneGPU {
     if (scene === this.lastScene && skyOnly === this.lastSkyOnly && this.terrains.version === this.lastVersion) return;
     this.terrains.beginPack();
     const before = this.terrains.version;
-    let packed = packScene(scene, this.terrains.resolve, { skyOnly });
+    const pack = () => {
+      this.terrainUnavailable = false;
+      return packScene(scene, (terrain) => {
+        const slot = this.terrains.resolve(terrain);
+        if (!slot) this.terrainUnavailable = true;
+        return slot;
+      }, { skyOnly });
+    };
+    let packed = pack();
     // Uploading a larger terrain may have reallocated the array: slots packed earlier moved.
-    if (this.terrains.version !== before) packed = packScene(scene, this.terrains.resolve, { skyOnly });
+    if (this.terrains.version !== before) packed = pack();
     this.upload(packed);
     this.lastScene = scene;
     this.lastSkyOnly = skyOnly;

@@ -3,7 +3,7 @@
  * (one axis). The tool computes new objects from the snapshot taken at drag start, so a
  * drag is reversible while scrubbing and lands in history as one undo step.
  */
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '@/core/store';
 import type { SceneObject } from '@/core/types';
 import { Icon3D, TriangleMenu, useHint, type IconKind, type MenuItem } from '@/ui/kit';
@@ -41,6 +41,8 @@ const AXIS_LABEL: Record<ToolMode, string> = { all: 'XYZ', x: 'X', y: 'Y', z: 'Z
 export function DragTool({ kind, label, hint, disabled, handles = [], apply, keyStep = 6, menu, menuHint, onBegin }: DragToolProps) {
   const [drag, setDrag] = useState<{ mode: ToolMode; readout: string } | null>(null);
   const base = useRef<SceneObject[]>([]);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => () => cleanupRef.current?.(), []);
 
   const commit = (mode: ToolMode, d: DragDelta) => {
     const s = useStore.getState();
@@ -64,6 +66,7 @@ export function DragTool({ kind, label, hint, disabled, handles = [], apply, key
 
   const startDrag = (mode: ToolMode) => (e: React.PointerEvent) => {
     if (disabled || e.button !== 0) return;
+    cleanupRef.current?.();
     e.preventDefault();
     e.stopPropagation();
     const el = e.currentTarget as HTMLElement;
@@ -80,19 +83,33 @@ export function DragTool({ kind, label, hint, disabled, handles = [], apply, key
     setDrag({ mode, readout: '' });
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== id) return;
+      if (!el.isConnected || el.closest('[hidden], [inert]')) {
+        cleanupRef.current?.();
+        return;
+      }
       commit(mode, { dx: ev.clientX - sx, dy: sy - ev.clientY, shift: ev.shiftKey, alt: ev.altKey });
     };
-    const up = (ev: PointerEvent) => {
-      if (ev.pointerId !== id) return;
+    const cleanup = () => {
+      if (cleanupRef.current !== cleanup) return;
+      cleanupRef.current = null;
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
+      window.removeEventListener('blur', cleanup);
+      el.removeEventListener('lostpointercapture', cleanup);
+      if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
       useStore.getState().endGesture();
       setDrag(null);
     };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId === id) cleanup();
+    };
+    cleanupRef.current = cleanup;
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
+    window.addEventListener('blur', cleanup);
+    el.addEventListener('lostpointercapture', cleanup);
   };
 
   const onKey = (mode: ToolMode) => (e: React.KeyboardEvent) => {

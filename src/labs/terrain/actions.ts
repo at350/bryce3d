@@ -39,6 +39,11 @@ export interface EditorContext {
 
 export const randomSeed = () => Math.floor(Math.random() * 999_999) + 1;
 
+/** Clipping is editable while a worker computes heights from an earlier snapshot. */
+export function withCurrentClipping(next: TerrainData, current: TerrainData): TerrainData {
+  return { ...next, clipLow: current.clipLow, clipHigh: current.clipHigh };
+}
+
 let serial = 0;
 
 /** TerrainData for freshly generated heights, recipe recorded, clipping kept. */
@@ -67,7 +72,7 @@ export function runGeneratorAction(ctx: EditorContext, id: string, options: { se
     const base = ctx.ws.current();
     const h = await compute({ kind: 'generate', generator: g.id, seed, resolution: base.resolution, params: g.params });
     if (!h) return;
-    const next = generatedTerrain(base, g.id, seed, g.params, h);
+    const next = withCurrentClipping(generatedTerrain(base, g.id, seed, g.params, h), ctx.ws.current());
     ctx.ws.commit(next);
     ctx.setLast({ serial: ++serial, kind: 'gen', id: g.id, label, params: g.params, seed, base, result: next });
   });
@@ -80,7 +85,7 @@ export function runOpAction(ctx: EditorContext, id: string, params: Params = {},
     const { seed } = opInvocation(base, id, p);
     const h = await compute({ kind: 'op', heights: base.heights, resolution: base.resolution, op: id, params: p, seed });
     if (!h) return;
-    const next = withOpResult(base, id, p, h);
+    const next = withCurrentClipping(withOpResult(base, id, p, h), ctx.ws.current());
     ctx.ws.commit(next);
     ctx.setLast({ serial: ++serial, kind: 'op', id, label, params: p, seed, base, result: next });
   });
@@ -106,21 +111,23 @@ export function makeGradual(ctx: EditorContext, target: { kind: 'gen' | 'op'; id
     cancelAnimationFrame(raf);
     ctx.preview.clear();
     if (!base || !effect || !recipeOp || amount <= 0.001) return;
-    if (ctx.ws.current() !== base) return;
+    const current = ctx.ws.current();
+    if (current.heights !== base.heights || current.resolution !== base.resolution) return;
     const p = { ...recipeOp.params, amount: Math.round(amount * 1000) / 1000 };
-    ctx.ws.commit(withOpResult(base, recipeOp.op, p, lerpHeights(base.heights, effect, p.amount)));
+    ctx.ws.commit(withCurrentClipping(withOpResult(base, recipeOp.op, p, lerpHeights(base.heights, effect, p.amount)), current));
     ctx.setLast(null);
   };
 
   return {
     start() {
-      base = ctx.ws.current();
+      base = null;
       effect = null;
       ended = false;
       amount = 0;
-      const b = base;
       const label = target.kind === 'gen' ? getGenerator(target.id)?.label ?? 'Generator' : getOp(target.id)?.label ?? target.id;
       ctx.ws.enqueue(label, async (compute) => {
+        const b = ctx.ws.current();
+        base = b;
         if (target.kind === 'gen') {
           const seed = randomSeed();
           const g = resolveGenerator(target.id, seed, target.params);

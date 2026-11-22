@@ -51,6 +51,18 @@ For the browser integration check, start the app or production preview in anothe
 labs, rendering, PNG encoding, scene download/open, share links, libraries and compact layout. It saves
 screenshots and downloads under `/tmp/bryce-smoke`.
 
+With the development server running, `npm run test:terrain -- http://localhost:5173/` checks terrain
+intersections directly on the GPU, including steep Mosaic terrain and clipped surfaces.
+
+The release stress scripts expect the development server at `http://localhost:5301/`
+(`npm run dev -- --port 5301`). Run `node scripts/release-editor.mjs`,
+`node scripts/release-labs.mjs`, `node scripts/release-renderer.mjs`, and
+`node scripts/release-io.mjs` for the editor, worker/history races, GPU resource handling,
+and file/share persistence checks. Their evidence is written under `/tmp/bryce-release-*`.
+
+Tab and Shift+Tab move keyboard focus; `[` and `]` cycle scene objects. Object Attributes
+uses a working copy: OK applies one undoable change, and Cancel discards it.
+
 ## Deploy
 
 The build uses a relative base path, so `dist/` works at the root of a domain (Vercel, Netlify) and under a

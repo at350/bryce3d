@@ -106,7 +106,7 @@ export function runShortcut(a: ShortcutAction): boolean {
 }
 
 /** Keys that also move focus or scroll: only taken when focus is on the page itself. */
-const NEEDS_BODY_FOCUS = new Set(['Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Backspace', 'Delete', '/', '*', 'l', '?']);
+const NEEDS_BODY_FOCUS = new Set(['[', ']', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Backspace', 'Delete', '/', '*', 'l', '?']);
 
 function focusIsFree(target: EventTarget | null): boolean {
   const t = target as HTMLElement | null;

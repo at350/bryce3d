@@ -1,6 +1,7 @@
 /** The color picker panel used by ColorSwatch: saturation/value square, hue strip, hex field and handy swatches. */
 import { useEffect, useRef, useState } from 'react';
 import { clamp } from '@/core/math';
+import { usePointerDrag } from './pointerDrag';
 import type { RGB } from '@/core/types';
 import { fromHsv, HANDY_SWATCHES, hexOf, parseHex, sameColor, toHsv, type HSV } from './colorMath';
 
@@ -9,32 +10,21 @@ interface EyeDropperLike {
 }
 type EyeDropperCtor = new () => EyeDropperLike;
 
-function dragArea(e: React.PointerEvent, onPoint: (fx: number, fy: number) => void) {
-  if (e.button !== 0) return;
-  e.preventDefault();
-  const el = e.currentTarget as HTMLElement;
-  el.focus({ preventScroll: true });
-  const id = e.pointerId;
-  try {
-    el.setPointerCapture(id);
-  } catch {
-    // ignore
-  }
+function useAreaDrag(onPoint: (fx: number, fy: number) => void) {
+  const element = useRef<HTMLElement | null>(null);
   const at = (x: number, y: number) => {
-    const r = el.getBoundingClientRect();
+    const r = element.current?.getBoundingClientRect();
+    if (!r || r.width <= 0 || r.height <= 0) return;
     onPoint(clamp((x - r.left) / r.width, 0, 1), clamp((y - r.top) / r.height, 0, 1));
   };
-  at(e.clientX, e.clientY);
-  const move = (ev: PointerEvent) => ev.pointerId === id && at(ev.clientX, ev.clientY);
-  const up = (ev: PointerEvent) => {
-    if (ev.pointerId !== id) return;
-    window.removeEventListener('pointermove', move);
-    window.removeEventListener('pointerup', up);
-    window.removeEventListener('pointercancel', up);
-  };
-  window.addEventListener('pointermove', move);
-  window.addEventListener('pointerup', up);
-  window.addEventListener('pointercancel', up);
+  return usePointerDrag({
+    onStart: (e) => {
+      element.current = e.currentTarget as HTMLElement;
+      element.current.focus({ preventScroll: true });
+      at(e.clientX, e.clientY);
+    },
+    onMove: (_dx, _dy, e) => at(e.clientX, e.clientY),
+  });
 }
 
 export interface ColorPickerProps {
@@ -71,6 +61,8 @@ export function ColorPicker({ value, onChange, original }: ColorPickerProps) {
   };
 
   const [h, s, v] = hsv;
+  const svDrag = useAreaDrag((fx, fy) => emit([h, fx, 1 - fy]));
+  const hueDrag = useAreaDrag((_fx, fy) => emit([Math.min(fy, 0.9999), s, v]));
   const hueColor = hexOf(fromHsv([h, 1, 1]));
   const EyeDropper = (window as unknown as { EyeDropper?: EyeDropperCtor }).EyeDropper;
 
@@ -100,7 +92,7 @@ export function ColorPicker({ value, onChange, original }: ColorPickerProps) {
           tabIndex={0}
           aria-label="Saturation and brightness"
           aria-valuetext={`saturation ${Math.round(s * 100)}%, brightness ${Math.round(v * 100)}%`}
-          onPointerDown={(e) => dragArea(e, (fx, fy) => emit([h, fx, 1 - fy]))}
+          onPointerDown={svDrag}
           onKeyDown={svKeys}
         >
           <span className="bk-colorpicker__svdot" style={{ left: `${s * 100}%`, top: `${(1 - v) * 100}%`, background: hexOf(fromHsv(hsv)) }} />
@@ -113,7 +105,7 @@ export function ColorPicker({ value, onChange, original }: ColorPickerProps) {
           aria-valuemin={0}
           aria-valuemax={360}
           aria-valuenow={Math.round(h * 360)}
-          onPointerDown={(e) => dragArea(e, (_fx, fy) => emit([Math.min(fy, 0.9999), s, v]))}
+          onPointerDown={hueDrag}
           onKeyDown={hueKeys}
         >
           <span className="bk-colorpicker__huemark" style={{ top: `${h * 100}%` }} />

@@ -16,11 +16,14 @@ export interface PointerDragHandlers {
  */
 export function usePointerDrag(handlers: PointerDragHandlers) {
   const ref = useRef(handlers);
+  const cleanupRef = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     ref.current = handlers;
   });
+  useLayoutEffect(() => () => cleanupRef.current?.(), []);
   return useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    cleanupRef.current?.();
     e.preventDefault();
     const el = e.currentTarget as HTMLElement;
     const pointerId = e.pointerId;
@@ -35,6 +38,10 @@ export function usePointerDrag(handlers: PointerDragHandlers) {
     ref.current.onStart?.(e);
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return;
+      if (!el.isConnected || el.closest('[hidden], [inert]')) {
+        cleanupRef.current?.();
+        return;
+      }
       const dx = ev.clientX - lx;
       const dy = ev.clientY - ly;
       lx = ev.clientX;
@@ -42,15 +49,25 @@ export function usePointerDrag(handlers: PointerDragHandlers) {
       travel += Math.abs(dx) + Math.abs(dy);
       if (dx || dy) ref.current.onMove(dx, dy, ev);
     };
-    const finish = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return;
+    const cleanup = () => {
+      if (cleanupRef.current !== cleanup) return;
+      cleanupRef.current = null;
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', finish);
       window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('blur', cleanup);
+      el.removeEventListener('lostpointercapture', cleanup);
+      if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId);
       ref.current.onEnd?.({ moved: travel > 3 });
     };
+    const finish = (ev: PointerEvent) => {
+      if (ev.pointerId === pointerId) cleanup();
+    };
+    cleanupRef.current = cleanup;
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', finish);
+    window.addEventListener('blur', cleanup);
+    el.addEventListener('lostpointercapture', cleanup);
   }, []);
 }

@@ -42,7 +42,7 @@ uniform vec4 uSky[SKY_SLOT_COUNT];
 uniform vec4 uCam[4];
 // [0] image width, height, mosaic block, sample index  [1] origin x, top row, jitter, seed
 uniform vec4 uFrame[2];
-// [0] max rays, max depth, soft shadows, blur  [1] volume steps, terrain steps, sdf steps, has volumes
+// [0] max rays, max depth, soft shadows, blur  [1] volume steps, reserved, sdf steps, has volumes
 uniform vec4 uQuality[2];
 
 #define CAM_POS uCam[0].xyz
@@ -57,7 +57,6 @@ uniform vec4 uQuality[2];
 #define Q_SOFT (uQuality[0].z > 0.5)
 #define Q_BLUR (uQuality[0].w > 0.5)
 #define Q_VOL_STEPS int(uQuality[1].x)
-#define Q_TERRAIN_STEPS int(uQuality[1].y)
 #define Q_SDF_STEPS int(uQuality[1].z)
 #define Q_HAS_VOLUMES (uQuality[1].w > 0.5)
 

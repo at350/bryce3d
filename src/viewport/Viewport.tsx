@@ -44,7 +44,7 @@ export function Viewport() {
   }, []);
 
   return (
-    <div className="bv-root" ref={rootRef} aria-label="Working window">
+    <div className="bv-root" ref={rootRef} aria-label="Working window" tabIndex={0}>
       <div className="bv-render" ref={holderRef} />
       <div className="bv-gl" ref={glHostRef} />
       <canvas className="bv-overlay" ref={overlayRef} />

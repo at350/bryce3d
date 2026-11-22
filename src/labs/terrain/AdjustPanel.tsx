@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, DragValue, Slider } from '@/ui/kit';
 import { getGenerator, getOp, opInvocation, withOpResult } from '@/terrain';
 import { resolveParams, type ParamSpec, type Params } from '@/terrain/params';
-import { generatedTerrain, randomSeed, type EditorContext, type LastAction } from './actions';
+import { generatedTerrain, randomSeed, withCurrentClipping, type EditorContext, type LastAction } from './actions';
 
 interface Props {
   ctx: EditorContext;
@@ -49,7 +49,9 @@ export function AdjustPanel({ ctx, last, onClose }: Props) {
           if (!h) return;
           next = withOpResult(base, last.id, full, h);
         }
-        if (ws.current() !== resultRef.current) return;
+        const current = ws.current();
+        if (current.heights !== resultRef.current.heights || current.resolution !== resultRef.current.resolution) return;
+        next = withCurrentClipping(next, current);
         resultRef.current = next;
         ws.replace(next);
         ctx.setLast({ ...last, params: p, seed: s, result: next });

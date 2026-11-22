@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react';
 import { clamp } from '@/core/math';
 import { useHint } from './hint';
+import { usePointerDrag } from './pointerDrag';
 import { formatNumber, keyIncrement, parseNumberInput, quantize } from './numberFormat';
 
 export interface SliderProps {
@@ -36,35 +37,19 @@ export function Slider({ label, value, min, max, onChange, step, precision = 0, 
     return quantize(min + clamp((clientX - r.left) / r.width, 0, 1) * (max - min), s, min, max);
   };
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (disabled || e.button !== 0) return;
-    e.preventDefault();
-    const el = e.currentTarget as HTMLElement;
-    el.focus({ preventScroll: true });
-    const id = e.pointerId;
-    try {
-      el.setPointerCapture(id);
-    } catch {
-      // ignore
-    }
-    setDragging(true);
-    onStart?.();
-    onChange(valueAt(e.clientX));
-    const move = (ev: PointerEvent) => {
-      if (ev.pointerId === id) onChange(valueAt(ev.clientX));
-    };
-    const up = (ev: PointerEvent) => {
-      if (ev.pointerId !== id) return;
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
+  const drag = usePointerDrag({
+    onStart: (e) => {
+      (e.currentTarget as HTMLElement).focus({ preventScroll: true });
+      setDragging(true);
+      onStart?.();
+      onChange(valueAt(e.clientX));
+    },
+    onMove: (_dx, _dy, e) => onChange(valueAt(e.clientX)),
+    onEnd: () => {
       setDragging(false);
       onEnd?.();
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
-  };
+    },
+  });
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (disabled) return;
@@ -103,7 +88,7 @@ export function Slider({ label, value, min, max, onChange, step, precision = 0, 
         aria-valuenow={value}
         aria-valuetext={`${text}${unit}`}
         aria-disabled={disabled || undefined}
-        onPointerDown={onPointerDown}
+        onPointerDown={disabled ? undefined : drag}
         onKeyDown={onKeyDown}
       >
         <div className="bk-slider__fill" style={{ width: `${frac * 100}%` }} />

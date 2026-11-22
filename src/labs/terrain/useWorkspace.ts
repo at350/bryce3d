@@ -2,7 +2,7 @@
  * The editor's working copy: the TerrainData being edited, its in-lab undo/redo history and a
  * serial job queue (worker jobs run one after another, each starting from the latest terrain).
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TerrainData } from '@/core/types';
 import type { TerrainJob } from '@/terrain/jobs';
 import { runJobAsync } from '@/terrain/workerClient';
@@ -27,13 +27,20 @@ export interface Workspace {
   commit(next: TerrainData, from?: TerrainData): void;
   /** Swap the terrain without a new undo step (live tweaks of the last action). */
   replace(next: TerrainData): void;
+  /** Track a clipping gesture separately from worker commits that finish during it. */
+  beginClipGesture(): void;
+  endClipGesture(): void;
   undo(): void;
   redo(): void;
   canUndo: boolean;
   canRedo: boolean;
   busy: BusyState | null;
+  /** Reactive counterpart to isBusy, including the interval before the busy indicator. */
+  pending: boolean;
   /** True while any queued task is pending (even before the busy indicator shows). */
   isBusy(): boolean;
+  /** Invalidate this workspace and discard results from its unfinished tasks. */
+  dispose(): void;
   /**
    * Queue a task. Tasks run one at a time; `compute` runs a worker job and resolves with its
    * heights, or null when a newer task with the same `supersede` key has been queued since.
@@ -48,11 +55,22 @@ export function useWorkspace(initial: TerrainData): Workspace {
   const redoRef = useRef<TerrainData[]>([]);
   const [hist, setHist] = useState({ undo: 0, redo: 0 });
   const [busy, setBusy] = useState<BusyState | null>(null);
+  const [pending, setPending] = useState(false);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const latestRef = useRef(new Map<string, number>());
   const pendingRef = useRef(0);
+  const activeRef = useRef(true);
+  const clipGestureRef = useRef<TerrainData | null>(null);
+
+  useEffect(() => {
+    activeRef.current = true;
+    return () => { activeRef.current = false; };
+  }, []);
+
+  const dispose = useCallback(() => { activeRef.current = false; }, []);
 
   const set = useCallback((next: TerrainData) => {
+    if (!activeRef.current) return;
     ref.current = next;
     setTerrain(next);
   }, []);
@@ -61,12 +79,16 @@ export function useWorkspace(initial: TerrainData): Workspace {
 
   const commit = useCallback(
     (next: TerrainData, from: TerrainData = ref.current) => {
+      if (!activeRef.current) return;
       if (next === from) {
         if (next !== ref.current) set(next);
         return;
       }
       const undo = undoRef.current;
-      undo.push(from);
+      const clipStart = clipGestureRef.current;
+      // A worker finishing mid-drag is an earlier history step than the gesture.
+      // Its undo snapshot must use the clipping from before that gesture began.
+      undo.push(clipStart ? { ...from, clipLow: clipStart.clipLow, clipHigh: clipStart.clipHigh } : from);
       let bytes = 0;
       for (let i = undo.length - 1; i >= 0; i--) {
         bytes += undo[i].heights.byteLength;
@@ -82,7 +104,23 @@ export function useWorkspace(initial: TerrainData): Workspace {
     [set, syncHist],
   );
 
+  const beginClipGesture = useCallback(() => {
+    clipGestureRef.current = ref.current;
+  }, []);
+
+  const endClipGesture = useCallback(() => {
+    const gesture = clipGestureRef.current;
+    clipGestureRef.current = null;
+    if (!gesture || !activeRef.current) return;
+    const { clipLow, clipHigh } = gesture;
+    const current = ref.current;
+    if (current.clipLow !== clipLow || current.clipHigh !== clipHigh) {
+      commit(current, { ...current, clipLow, clipHigh });
+    }
+  }, [commit]);
+
   const undo = useCallback(() => {
+    if (pendingRef.current > 0 || clipGestureRef.current || !activeRef.current) return;
     const prev = undoRef.current.pop();
     if (!prev) return;
     redoRef.current.push(ref.current);
@@ -91,6 +129,7 @@ export function useWorkspace(initial: TerrainData): Workspace {
   }, [set, syncHist]);
 
   const redo = useCallback(() => {
+    if (pendingRef.current > 0 || clipGestureRef.current || !activeRef.current) return;
     const next = redoRef.current.pop();
     if (!next) return;
     undoRef.current.push(ref.current);
@@ -99,19 +138,23 @@ export function useWorkspace(initial: TerrainData): Workspace {
   }, [set, syncHist]);
 
   const enqueue = useCallback<Workspace['enqueue']>((label, task, supersede) => {
+    if (!activeRef.current) return;
     let ticket = 0;
     if (supersede) {
       ticket = (latestRef.current.get(supersede) ?? 0) + 1;
       latestRef.current.set(supersede, ticket);
     }
-    const stale = () => !!supersede && latestRef.current.get(supersede) !== ticket;
+    const stale = () => !activeRef.current || (!!supersede && latestRef.current.get(supersede) !== ticket);
     pendingRef.current++;
+    setPending(true);
     const run = async () => {
-      const timer = setTimeout(() => setBusy({ label, progress: null }), BUSY_DELAY_MS);
+      const timer = setTimeout(() => { if (activeRef.current) setBusy({ label, progress: null }); }, BUSY_DELAY_MS);
       try {
         if (stale()) return;
         await task(async (job) => {
-          const h = await runJobAsync(job, (f) => setBusy((b) => (b ? { label, progress: f } : b)));
+          const h = await runJobAsync(job, (f) => {
+            if (activeRef.current) setBusy((b) => (b ? { label, progress: f } : b));
+          });
           return stale() ? null : h;
         });
       } catch (err) {
@@ -119,7 +162,10 @@ export function useWorkspace(initial: TerrainData): Workspace {
       } finally {
         clearTimeout(timer);
         pendingRef.current--;
-        if (pendingRef.current === 0) setBusy(null);
+        if (activeRef.current && pendingRef.current === 0) {
+          setBusy(null);
+          setPending(false);
+        }
       }
     };
     queueRef.current = queueRef.current.then(run);
@@ -134,14 +180,18 @@ export function useWorkspace(initial: TerrainData): Workspace {
       current,
       commit,
       replace: set,
+      beginClipGesture,
+      endClipGesture,
       undo,
       redo,
       canUndo: hist.undo > 0,
       canRedo: hist.redo > 0,
       busy,
+      pending,
       isBusy,
+      dispose,
       enqueue,
     }),
-    [terrain, current, commit, set, undo, redo, hist, busy, isBusy, enqueue],
+    [terrain, current, commit, set, beginClipGesture, endClipGesture, undo, redo, hist, busy, pending, isBusy, dispose, enqueue],
   );
 }

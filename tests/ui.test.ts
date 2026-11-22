@@ -235,7 +235,10 @@ describe('keyboard shortcuts', () => {
     expect(resolveShortcut(k('ArrowLeft'))).toEqual({ type: 'nudge', dir: 'left', step: 1 });
     expect(resolveShortcut(k('ArrowUp', { shiftKey: true }))).toEqual({ type: 'nudge', dir: 'up', step: 5 });
     expect(resolveShortcut(k('PageDown', { altKey: true }))).toEqual({ type: 'nudge', dir: 'lower', step: 0.1 });
-    expect(resolveShortcut(k('Tab', { shiftKey: true }))).toEqual({ type: 'cycle', delta: -1 });
+    expect(resolveShortcut(k('Tab'))).toBeNull();
+    expect(resolveShortcut(k('Tab', { shiftKey: true }))).toBeNull();
+    expect(resolveShortcut(k('['))).toEqual({ type: 'cycle', delta: -1 });
+    expect(resolveShortcut(k(']'))).toEqual({ type: 'cycle', delta: 1 });
   });
 });
 

@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:browser": "node scripts/smoke.mjs",
+    "test:terrain": "node scripts/terrain-regression.mjs",
     "lint": "eslint ."
   },
   "dependencies": {

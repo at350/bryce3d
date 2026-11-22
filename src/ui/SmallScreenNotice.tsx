@@ -1,6 +1,8 @@
 /** A friendly note on phones and tiny windows: the editor wants room and a mouse. Can be dismissed. */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, GlossBall } from '@/ui/kit';
+import { useLayer } from '@/ui/kit/layers';
+import { useModalFocus } from '@/ui/kit/rooms';
 import { isTooSmallForEditor } from './layoutScale';
 
 const KEY = 'bryce3d-web:small-screen-ok';
@@ -19,9 +21,21 @@ export function SmallScreenNotice() {
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
   }, []);
-  if (dismissed || !isTooSmallForEditor(size.w, size.h)) return null;
+  const active = !dismissed && isTooSmallForEditor(size.w, size.h);
+  const dismiss = () => {
+    try {
+      sessionStorage.setItem(KEY, '1');
+    } catch {
+      // ignore
+    }
+    setDismissed(true);
+  };
+  const layer = useLayer('dialog', dismiss, active);
+  const ref = useRef<HTMLDivElement>(null);
+  useModalFocus(ref, layer, active);
+  if (!active) return null;
   return (
-    <div className="smallscreen" role="dialog" aria-modal="true" aria-labelledby="smallscreen-title">
+    <div ref={ref} tabIndex={-1} className="smallscreen" role="dialog" aria-modal="true" aria-labelledby="smallscreen-title" onKeyDown={(e) => e.stopPropagation()}>
       <div className="smallscreen__card">
         <GlossBall size={64} tone="accent" />
         <h1 id="smallscreen-title">Bryce 3D Web</h1>
@@ -29,14 +43,7 @@ export function SmallScreenNotice() {
         <p>Open it on a laptop or desktop (1024 × 700 or larger) for the full experience.</p>
         <Button
           variant="primary"
-          onClick={() => {
-            try {
-              sessionStorage.setItem(KEY, '1');
-            } catch {
-              // ignore
-            }
-            setDismissed(true);
-          }}
+          onClick={dismiss}
         >
           Continue anyway
         </Button>

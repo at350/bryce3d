@@ -21,13 +21,10 @@ export class TerrainCache {
   private entries = new Map<Float32Array, Entry>();
   private clock = 0;
   private pinned = new Set<Float32Array>();
-  /** Bumps whenever existing slots change (texture reallocated), forcing a re-pack. */
+  /** Bumps when slots or their availability change, invalidating resident scene packing. */
   version = 0;
 
-  constructor(
-    private gl: WebGL2RenderingContext,
-    private internalFormat: number,
-  ) {
+  constructor(private gl: WebGL2RenderingContext) {
     this.allocate(1, 1);
   }
 
@@ -42,7 +39,10 @@ export class TerrainCache {
 
   /** Keep these terrains resident (the running main render's terrains). */
   pin(heights: Float32Array[]): void {
-    this.pinned = new Set(heights);
+    const next = new Set(heights);
+    if (next.size === this.pinned.size && [...next].every(h => this.pinned.has(h))) return;
+    this.pinned = next;
+    this.version++;
   }
 
   resolve = (terrain: TerrainData): TerrainSlot | null => {
@@ -64,7 +64,6 @@ export class TerrainCache {
       layer: e.layer,
       uvScale: (e.prepared.n - 1) / S,
       uvBias: 0.5 / S,
-      lipschitz: e.prepared.lipschitz,
       maxHeight: e.prepared.maxHeight,
       resolution: e.prepared.n,
     };
@@ -86,6 +85,7 @@ export class TerrainCache {
     }
     if (!victim) return -1;
     this.entries.delete(victim[0]);
+    this.version++;
     return victim[1].layer;
   }
 
@@ -96,9 +96,11 @@ export class TerrainCache {
     this.layerSize = size;
     this.capacity = capacity;
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.tex);
-    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, this.internalFormat, size, size, capacity);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    // Manual bilinear sampling uses texelFetch, so float-linear filtering is
+    // unnecessary. Keep Float32 precision: R16F rounding can exceed maxHeight.
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R32F, size, size, capacity);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     for (const e of this.entries.values()) this.upload(e);

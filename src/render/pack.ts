@@ -49,8 +49,6 @@ export interface TerrainSlot {
   /** uv = ((xz + 1) / 2) * uvScale + uvBias addresses the stored grid inside the layer. */
   uvScale: number;
   uvBias: number;
-  /** Max |dy/dx| of the object-space surface y = 2h - 1 (ray-march step bound). */
-  lipschitz: number;
   /** Highest stored height (0..1). */
   maxHeight: number;
   /** Stored grid size (for normal finite differences). */
@@ -340,7 +338,7 @@ function packObject(
         header,
         tr.bounds,
         tr.inverse,
-        [slot.layer, slot.uvScale, slot.uvBias, slot.lipschitz],
+        [slot.layer, slot.uvScale, slot.uvBias, 0],
         [lo, hi, Math.min(slot.maxHeight, hi), slot.resolution],
       );
       return true;

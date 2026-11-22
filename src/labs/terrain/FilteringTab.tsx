@@ -61,7 +61,7 @@ export function FilteringTab({ ctx, rampCss }: Props) {
   };
 
   const apply = () => {
-    if (identity || amount <= 0) return;
+    if (identity || amount <= 0 || ctx.ws.isBusy()) return;
     const params = curveToParams(curve);
     if (amount < 1) params.amount = Math.round(amount * 1000) / 1000;
     ctx.ws.commit(applyOpToTerrain(ctx.ws.current(), 'curve', params));
@@ -98,7 +98,7 @@ export function FilteringTab({ ctx, rampCss }: Props) {
         <Button onClick={() => edit(identityCurve())} hint="Back to the straight diagonal" disabled={identity}>
           Reset
         </Button>
-        <Button variant="primary" onClick={apply} hint="Apply the filter to the terrain" disabled={identity || amount <= 0}>
+        <Button variant="primary" onClick={apply} hint="Apply the filter to the terrain" disabled={identity || amount <= 0 || ctx.ws.pending}>
           Apply
         </Button>
       </div>

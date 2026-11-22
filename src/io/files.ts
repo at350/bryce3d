@@ -30,6 +30,7 @@ export function openSceneFile(): Promise<Scene | null> {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,.bryce.json,application/json';
+    input.oncancel = () => resolve(null);
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return resolve(null);

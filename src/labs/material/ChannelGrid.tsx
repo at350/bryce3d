@@ -56,7 +56,7 @@ function Row({ row, editor, onSelect }: { row: GridRow; editor: LabEditor; onSel
       let next = toggleDriver(cur, channel, i, (idx) => newComponentFor(cur, channel, idx));
       if (driverOf(next, channel) === i && row.kind === 'value') next = ensureVisible(next, row);
       return next;
-    }, 'driver');
+    });
     onSelect(i);
   };
   return (

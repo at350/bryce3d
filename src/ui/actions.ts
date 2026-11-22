@@ -45,6 +45,7 @@ export function createFromItem(item: CreateItem): void {
   const s = store();
   const transform = creationTransform(item.type, placementCamera(), s.scene.objects, item.scale);
   const obj = s.createObject(item.type, { transform });
+  document.querySelector<HTMLElement>('.bv-root')?.focus({ preventScroll: true });
   status(`Created ${obj.name}`);
 }
 
@@ -121,7 +122,7 @@ export function nudgeSelection(dir: 'left' | 'right' | 'up' | 'down' | 'raise' |
   editSelection((objs) => objs.map((o) => moveObject(o, [d[0] * step, d[1] * step, d[2] * step])));
 }
 
-/** Select the next/previous object (Tab in Bryce). */
+/** Select the next/previous object (bracket keys leave Tab free for focus). */
 export function cycleSelection(delta: 1 | -1): void {
   const s = store();
   const objs = s.scene.objects.filter((o) => !o.hidden);

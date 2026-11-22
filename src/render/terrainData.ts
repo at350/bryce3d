@@ -1,4 +1,4 @@
-/** Pure heightfield preparation for the GPU: validation, downsampling, march bounds. */
+/** Pure heightfield preparation for the GPU: validation, downsampling, height bounds. */
 import type { TerrainData } from '@/core/types';
 
 export const MAX_TERRAIN_GRID = 512;
@@ -7,8 +7,6 @@ export interface PreparedTerrain {
   /** Grid size of `data` (<= MAX_TERRAIN_GRID). */
   n: number;
   data: Float32Array;
-  /** Max |dy/dx| of the object-space surface y = 2h - 1 between neighboring samples. */
-  lipschitz: number;
   maxHeight: number;
 }
 
@@ -45,18 +43,10 @@ export function prepareTerrain(t: TerrainData): PreparedTerrain | null {
     for (let i = 0; i < h.length; i++) data[i] = h[i];
   }
   let maxH = 0;
-  let maxD = 0;
   for (let i = 0; i < data.length; i++) {
     const v = Number.isFinite(data[i]) ? Math.min(1, Math.max(0, data[i])) : 0;
     data[i] = v;
     if (v > maxH) maxH = v;
   }
-  for (let z = 0; z < n; z++) {
-    for (let x = 0; x < n; x++) {
-      const v = data[z * n + x];
-      if (x + 1 < n) maxD = Math.max(maxD, Math.abs(data[z * n + x + 1] - v));
-      if (z + 1 < n) maxD = Math.max(maxD, Math.abs(data[(z + 1) * n + x] - v));
-    }
-  }
-  return { n, data, lipschitz: Math.min(maxD * (n - 1), 256), maxHeight: maxH };
+  return { n, data, maxHeight: maxH };
 }

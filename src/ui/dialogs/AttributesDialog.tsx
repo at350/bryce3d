@@ -1,9 +1,9 @@
 /**
  * Object Attributes: name, flags and family (General), position / rotation / size
  * (Transform), and the type's own parameters (torus, stone, tree, light, terrain, plane).
- * Edits apply live; ✗ (or Esc) puts the object back the way it was when the dialog opened.
+ * Edits stay in a working copy; ✓ applies them once and ✗ (or Esc) discards them.
  */
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { FAMILY_COLORS, FAMILY_NAMES } from '@/core/defaults';
 import { randomSeed, rgbToHex } from '@/core/math';
 import { OBJECT_LABELS, isInfinitePlane, isLight, isTerrainLike } from '@/core/objects';
@@ -12,7 +12,6 @@ import type { LightParams, SceneObject, StoneParams, TreeParams, Vec3 } from '@/
 import { Button, ColorSwatch, Dialog, DragValue, Icon3D, IconButton, Select, Slider, Tabs, Toggle } from '@/ui/kit';
 import { landObjects } from '../edit/transformOps';
 
-const gesture = { onStart: () => useStore.getState().beginGesture(), onEnd: () => useStore.getState().endGesture() };
 const AXES = ['X', 'Y', 'Z'];
 
 type Tab = 'general' | 'transform' | 'shape';
@@ -42,7 +41,6 @@ function VecRow({ label, value, onChange, min, max, speed, precision, unit = '' 
           precision={precision}
           unit={unit}
           width={104}
-          {...gesture}
           onChange={(v) => {
             const next = [...value] as Vec3;
             next[i] = v;
@@ -92,17 +90,16 @@ function GeneralTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneOb
   );
 }
 
-function TransformTab({ o }: { o: SceneObject }) {
-  const s = useStore.getState();
+function TransformTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneObject>) => void }) {
   const t = o.transform;
-  const setT = (patch: Partial<SceneObject['transform']>) => s.setTransform(o.id, patch);
+  const setT = (patch: Partial<SceneObject['transform']>) => update({ transform: { ...t, ...patch } });
   if (isInfinitePlane(o.type)) {
     return (
       <div className="dlg-section">
         <div className="dlg-row">
-          <DragValue label="Height" value={t.position[1]} min={-10000} max={10000} speed={0.05} precision={2} width={150} {...gesture} onChange={(v) => setT({ position: [t.position[0], v, t.position[2]] })} />
+          <DragValue label="Height" value={t.position[1]} min={-10000} max={10000} speed={0.05} precision={2} width={150} onChange={(v) => setT({ position: [t.position[0], v, t.position[2]] })} />
           {o.type === 'cloud' && (
-            <DragValue label="Thickness" value={t.scale[1] * 2} min={0.2} max={1000} speed={0.05} precision={2} width={160} {...gesture} onChange={(v) => setT({ scale: [t.scale[0], v / 2, t.scale[2]] })} />
+            <DragValue label="Thickness" value={t.scale[1] * 2} min={0.2} max={1000} speed={0.05} precision={2} width={160} onChange={(v) => setT({ scale: [t.scale[0], v / 2, t.scale[2]] })} />
           )}
         </div>
         <p className="dlg-note">Infinite planes stretch to the horizon; position X/Z and rotation are ignored.</p>
@@ -123,7 +120,7 @@ function TransformTab({ o }: { o: SceneObject }) {
         onChange={(v) => setT({ scale: [v[0] / 2, v[1] / 2, v[2] / 2] })}
       />
       <div className="dlg-row">
-        <Button hint="Drop the object onto the ground" onClick={() => s.updateObject(o.id, landObjects([o])[0])}>
+        <Button hint="Drop the object onto the ground" onClick={() => update(landObjects([o])[0])}>
           Land
         </Button>
         <Button hint="Clear the rotation" onClick={() => setT({ rotation: [0, 0, 0] })}>
@@ -151,12 +148,12 @@ function Dice({ onRoll, label }: { onRoll: () => void; label: string }) {
   );
 }
 
-function ShapeTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneObject>) => void }) {
+function ShapeTab({ o, update, commit }: { o: SceneObject; update: (p: Partial<SceneObject>) => void; commit: () => void }) {
   if (o.type === 'torus') {
     const r = o.torus?.minorRadius ?? 0.3;
     return (
       <div className="dlg-section">
-        <Slider label="Thickness" value={r} min={0.05} max={0.5} step={0.01} precision={2} width={420} {...gesture} onChange={(v) => update({ torus: { minorRadius: v } })} hint="Tube radius (the ring always touches the box)" />
+        <Slider label="Thickness" value={r} min={0.05} max={0.5} step={0.01} precision={2} width={420} onChange={(v) => update({ torus: { minorRadius: v } })} hint="Tube radius (the ring always touches the box)" />
       </div>
     );
   }
@@ -166,11 +163,11 @@ function ShapeTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneObje
     return (
       <div className="dlg-section">
         <div className="dlg-row">
-          <DragValue label="Seed" value={st.seed} min={0} max={999999} step={1} speed={20} width={150} {...gesture} onChange={(v) => set({ seed: v })} />
+          <DragValue label="Seed" value={st.seed} min={0} max={999999} step={1} speed={20} width={150} onChange={(v) => set({ seed: v })} />
           <Dice label="New random stone" onRoll={() => set({ seed: randomSeed() % 1000000 })} />
         </div>
-        <Slider label="Lumpiness" value={st.lumpiness} min={0} max={1} precision={2} width={420} {...gesture} onChange={(v) => set({ lumpiness: v })} />
-        <Slider label="Roughness" value={st.roughness} min={0} max={1} precision={2} width={420} {...gesture} onChange={(v) => set({ roughness: v })} />
+        <Slider label="Lumpiness" value={st.lumpiness} min={0} max={1} precision={2} width={420} onChange={(v) => set({ lumpiness: v })} />
+        <Slider label="Roughness" value={st.roughness} min={0} max={1} precision={2} width={420} onChange={(v) => set({ roughness: v })} />
       </div>
     );
   }
@@ -192,13 +189,13 @@ function ShapeTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneObje
             ]}
             onChange={(v) => set({ crown: v as TreeParams['crown'] })}
           />
-          <DragValue label="Seed" value={tr.seed} min={0} max={999999} step={1} speed={20} width={130} {...gesture} onChange={(v) => set({ seed: v })} />
+          <DragValue label="Seed" value={tr.seed} min={0} max={999999} step={1} speed={20} width={130} onChange={(v) => set({ seed: v })} />
           <Dice label="New random tree" onRoll={() => set({ seed: randomSeed() % 1000000 })} />
         </div>
-        <Slider label="Crown clumps" value={tr.crownNoise} min={0} max={1} precision={2} width={420} {...gesture} onChange={(v) => set({ crownNoise: v })} />
-        <Slider label="Trunk height" value={tr.trunkHeight} min={0.2} max={0.8} precision={2} width={420} {...gesture} onChange={(v) => set({ trunkHeight: v })} />
-        <Slider label="Trunk width" value={tr.trunkWidth} min={0.03} max={0.3} precision={2} width={420} {...gesture} onChange={(v) => set({ trunkWidth: v })} />
-        <ColorSwatch label="Trunk color" value={tr.trunkColor} {...gesture} onChange={(c) => set({ trunkColor: c })} />
+        <Slider label="Crown clumps" value={tr.crownNoise} min={0} max={1} precision={2} width={420} onChange={(v) => set({ crownNoise: v })} />
+        <Slider label="Trunk height" value={tr.trunkHeight} min={0.2} max={0.8} precision={2} width={420} onChange={(v) => set({ trunkHeight: v })} />
+        <Slider label="Trunk width" value={tr.trunkWidth} min={0.03} max={0.3} precision={2} width={420} onChange={(v) => set({ trunkWidth: v })} />
+        <ColorSwatch label="Trunk color" value={tr.trunkColor} onChange={(c) => set({ trunkColor: c })} />
         <p className="dlg-note">The crown uses the object's material (Materials Lab).</p>
       </div>
     );
@@ -210,7 +207,7 @@ function ShapeTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneObje
     return (
       <div className="dlg-section">
         <div className="dlg-row">
-          <ColorSwatch label="Light color" value={l.color} size={26} {...gesture} onChange={(c) => set({ color: c })} />
+          <ColorSwatch label="Light color" value={l.color} size={26} onChange={(c) => set({ color: c })} />
           <Select
             label="Falloff"
             value={l.falloff}
@@ -223,9 +220,9 @@ function ShapeTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneObje
             onChange={(v) => set({ falloff: v as LightParams['falloff'] })}
           />
         </div>
-        <Slider label="Intensity" value={l.intensity} min={0} max={200} step={1} width={420} {...gesture} onChange={(v) => set({ intensity: v })} />
-        {spot && <Slider label="Cone angle" value={l.coneAngle} min={5} max={170} step={1} unit="°" width={420} {...gesture} onChange={(v) => set({ coneAngle: v })} />}
-        <Slider label={spot ? 'Edge softness' : 'Softness'} value={l.softness} min={0} max={1} precision={2} width={420} {...gesture} onChange={(v) => set({ softness: v })} />
+        <Slider label="Intensity" value={l.intensity} min={0} max={200} step={1} width={420} onChange={(v) => set({ intensity: v })} />
+        {spot && <Slider label="Cone angle" value={l.coneAngle} min={5} max={170} step={1} unit="°" width={420} onChange={(v) => set({ coneAngle: v })} />}
+        <Slider label={spot ? 'Edge softness' : 'Softness'} value={l.softness} min={0} max={1} precision={2} width={420} onChange={(v) => set({ softness: v })} />
         <div className="dlg-row">
           <Toggle label="Visible glow" value={l.visible} onChange={(v) => set({ visible: v })} hint="Render a glowing ball or disc where the light is" />
           <Toggle label="Cast shadows" value={l.castShadows} onChange={(v) => set({ castShadows: v })} />
@@ -244,6 +241,7 @@ function ShapeTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneObje
         <Button
           variant="primary"
           onClick={() => {
+            commit();
             useStore.getState().closeDialog();
             useStore.getState().openLab('terrain', o.id);
           }}
@@ -257,19 +255,20 @@ function ShapeTab({ o, update }: { o: SceneObject; update: (p: Partial<SceneObje
 }
 
 export function AttributesDialog() {
-  const obj = useStore(selectPrimarySelection);
+  const selected = useStore(selectPrimarySelection);
   const count = useStore((s) => s.selection.length);
-  const initial = useRef<SceneObject | undefined>(obj);
+  const [initial] = useState<SceneObject | undefined>(selected);
+  const [obj, setObj] = useState<SceneObject | undefined>(selected);
   const [tab, setTab] = useState<Tab>('general');
   const close = () => useStore.getState().closeDialog();
-  const cancel = () => {
-    const start = initial.current;
-    const now = start && useStore.getState().scene.objects.find((o) => o.id === start.id);
-    if (start && now && now !== start) {
-      const { id, ...rest } = start;
-      useStore.getState().updateObject(id, rest);
-    }
-    close();
+  const commit = () => {
+    const store = useStore.getState();
+    if (!obj || obj === initial || !store.scene.objects.some((o) => o.id === obj.id)) return;
+    const { id, ...patch } = obj;
+    // Each accepted dialog is its own undo step, even when reopened quickly.
+    store.beginGesture();
+    store.updateObject(id, patch);
+    store.endGesture();
   };
 
   if (!obj) {
@@ -280,7 +279,7 @@ export function AttributesDialog() {
     );
   }
 
-  const update = (patch: Partial<SceneObject>) => useStore.getState().updateObject(obj.id, patch);
+  const update = (patch: Partial<SceneObject>) => setObj((current) => current ? { ...current, ...patch } : current);
   const shapeLabel = shapeTabLabel(obj);
   const tabs = [
     { id: 'general', label: 'General' },
@@ -289,7 +288,7 @@ export function AttributesDialog() {
   ];
   const active: Tab = tab === 'shape' && !shapeLabel ? 'general' : tab;
   return (
-    <Dialog title="Object Attributes" width={520} onClose={close} onCancel={cancel} onConfirm={close}>
+    <Dialog title="Object Attributes" width={520} onClose={close} onCancel={close} onConfirm={() => { commit(); close(); }}>
       <div className="attr-head">
         <span className="attr-head__name">{obj.name}</span>
         {count > 1 && <span className="attr-head__more">+{count - 1} more selected (editing the last one)</span>}
@@ -297,8 +296,8 @@ export function AttributesDialog() {
       <Tabs tabs={tabs} value={active} onChange={(id) => setTab(id as Tab)} className="dlg-tabs" />
       <div className="dlg-tabpanel" role="tabpanel">
         {active === 'general' && <GeneralTab o={obj} update={update} />}
-        {active === 'transform' && <TransformTab o={obj} />}
-        {active === 'shape' && <ShapeTab o={obj} update={update} />}
+        {active === 'transform' && <TransformTab o={obj} update={update} />}
+        {active === 'shape' && <ShapeTab o={obj} update={update} commit={commit} />}
       </div>
     </Dialog>
   );

@@ -94,7 +94,7 @@ export function PicturesTab({ ctx, incomingFile, onFileTaken }: Props) {
   }, [incomingFile, onFileTaken]);
 
   const apply = () => {
-    if (!picture || amount <= 0) return;
+    if (!picture || amount <= 0 || ctx.ws.isBusy()) return;
     const base = ctx.ws.current();
     if (source?.kind === 'pattern') {
       const def = getPattern(source.id)!;
@@ -197,7 +197,7 @@ export function PicturesTab({ ctx, incomingFile, onFileTaken }: Props) {
           <Button onClick={() => setSource(null)} disabled={!source} hint="Remove the picture">
             Clear
           </Button>
-          <Button variant="primary" onClick={apply} disabled={!picture || amount <= 0} hint="Blend the picture into the terrain">
+          <Button variant="primary" onClick={apply} disabled={!picture || amount <= 0 || ctx.ws.pending} hint="Blend the picture into the terrain">
             Apply
           </Button>
         </div>

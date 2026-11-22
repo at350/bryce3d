@@ -282,15 +282,25 @@ float hitSDF(int type, vec3 ro, vec3 rd, float tmin, float tmax, vec4 p0, vec4 p
 
 // ---------------------------------------------------------------------------
 // Terrain / lattice heightfields
-// tp: layer, uvScale, uvBias, lipschitz   cp: clipLow, clipHigh, maxHeight, grid size
+// tp: layer, uvScale, uvBias, reserved   cp: clipLow, clipHigh, maxHeight, grid size
 // ---------------------------------------------------------------------------
 
 float terrainH(vec2 xz, vec4 tp) {
-  vec2 uv = (clamp(xz, -1.0, 1.0) * 0.5 + 0.5) * tp.y + tp.z;
-  return textureLod(uTerrain, vec3(uv, tp.x), 0.0).r;
+  // Hardware linear filtering can quantize interpolation weights. Use the
+  // same bilinear surface for occupancy, normals, volumes and ray roots.
+  int last = int(round(tp.y * float(textureSize(uTerrain, 0).x)));
+  vec2 grid = (clamp(xz, -1.0, 1.0) * 0.5 + 0.5) * float(last);
+  ivec2 cell = clamp(ivec2(floor(grid)), ivec2(0), ivec2(max(last - 1, 0)));
+  vec2 uv = grid - vec2(cell);
+  int layer = int(tp.x);
+  float h00 = texelFetch(uTerrain, ivec3(cell, layer), 0).r;
+  float h10 = texelFetch(uTerrain, ivec3(cell + ivec2(min(last, 1), 0), layer), 0).r;
+  float h01 = texelFetch(uTerrain, ivec3(cell + ivec2(0, min(last, 1)), layer), 0).r;
+  float h11 = texelFetch(uTerrain, ivec3(cell + ivec2(min(last, 1)), layer), 0).r;
+  return mix(mix(h00, h10, uv.x), mix(h01, h11, uv.x), uv.y);
 }
 
-// Positive outside the solid, negative inside.
+// Signed interior test used to shape volume materials on terrain and lattices.
 float terrainF(vec3 p, vec4 tp, vec4 cp, bool lattice) {
   float h = terrainH(p.xz, tp);
   if (h < cp.x || (lattice && h <= 1e-4)) return 0.02;
@@ -311,57 +321,159 @@ vec3 terrainNormal(vec3 p, vec4 tp, vec4 cp, bool lattice) {
   return n;
 }
 
-float hitTerrain(vec3 ro, vec3 rd, float tmin, float tmax, vec4 tp, vec4 cp, bool lattice, int steps, out vec3 n) {
+// Roots of a quadratic in the normalized interval parameter s. Stable q-form avoids
+// cancellation for the shallow rays that hit almost-vertical Mosaic cliffs.
+vec2 terrainRoots(vec3 q) {
+  float eps = 1e-7 * max(max(abs(q.x), abs(q.y)), max(abs(q.z), 1e-8));
+  if (abs(q.x) <= eps) {
+    if (abs(q.y) <= eps) return abs(q.z) <= eps ? vec2(0.0, INF) : vec2(INF);
+    return vec2(-q.z / q.y, INF);
+  }
+  float d = q.y * q.y - 4.0 * q.x * q.z;
+  if (d < 0.0) return vec2(INF);
+  float v = -0.5 * (q.y + (q.y >= 0.0 ? 1.0 : -1.0) * sqrt(d));
+  if (v == 0.0) return vec2(-q.y / (2.0 * q.x), INF);
+  vec2 roots = vec2(v / q.x, q.z / v);
+  return vec2(min(roots.x, roots.y), max(roots.x, roots.y));
+}
+
+float terrainPoly(vec3 q, float s) { return (q.x * s + q.y) * s + q.z; }
+
+// First root in this cell's ray segment whose height (or y for a clipping wall)
+// satisfies the surface's clipping interval.
+float terrainRootInRange(vec3 equation, vec3 value, float lo, float hi) {
+  vec2 roots = terrainRoots(equation);
+  for (int k = 0; k < 2; k++) {
+    float s = roots[k];
+    if (s < -1e-6 || s > 1.000001) continue;
+    s = clamp(s, 0.0, 1.0);
+    float h = terrainPoly(value, s);
+    if (h >= lo - 1e-6 && h <= hi + 1e-6) return s;
+  }
+  return INF;
+}
+
+bool terrainInside(vec3 p, vec4 tp, vec4 cp, bool lattice) {
+  float h = terrainH(p.xz, tp);
+  if (h < cp.x || (lattice && h <= 1e-4)) return false;
+  float hc = min(h, cp.y);
+  return lattice ? abs(p.y) <= hc + 1e-6 : p.y >= 2.0 * cp.x - 1.000001 && p.y <= 2.0 * hc - 0.999999;
+}
+
+vec3 terrainBoxNormal(vec3 p, float bot, float top) {
+  vec3 distanceToFace = vec3(abs(abs(p.x) - 1.0), min(abs(p.y - bot), abs(p.y - top)), abs(abs(p.z) - 1.0));
+  if (distanceToFace.x < distanceToFace.y && distanceToFace.x < distanceToFace.z) return vec3(sign(p.x), 0.0, 0.0);
+  if (distanceToFace.z < distanceToFace.y) return vec3(0.0, 0.0, sign(p.z));
+  return vec3(0.0, abs(p.y - bot) < abs(p.y - top) ? -1.0 : 1.0, 0.0);
+}
+
+vec2 terrainNextBoundary(ivec2 cell, ivec2 direction, vec3 ro, vec3 rd, float cells) {
+  vec2 next = vec2(INF);
+  for (int axis = 0; axis < 2; axis++) {
+    if (direction[axis] == 0) continue;
+    float edge = float(cell[axis] + (direction[axis] > 0 ? 1 : 0));
+    float position = edge * (2.0 / cells) - 1.0;
+    next[axis] = (position - ro.xz[axis]) / rd.xz[axis];
+  }
+  return next;
+}
+
+float hitTerrain(vec3 ro, vec3 rd, float tmin, float tmax, vec4 tp, vec4 cp, bool lattice, out vec3 n) {
   n = vec3(0.0, 1.0, 0.0);
   float top = lattice ? cp.z : 2.0 * cp.z - 1.0;
   float bot = lattice ? -cp.z : 2.0 * cp.x - 1.0;
-  vec3 bmin = vec3(-1.0, bot - 1e-3, -1.0);
-  vec3 bmax = vec3(1.0, top + 1e-3, 1.0);
-  vec2 iv = boxHit(ro, rd, bmin, bmax);
-  float t0 = max(iv.x, tmin);
-  float t1 = min(iv.y, tmax);
-  if (t0 > t1) return INF;
-  float L = max(tp.w, 0.05) * (lattice ? 0.5 : 1.0);
-  float denom = abs(rd.y) + L * length(rd.xz);
-  float texel = 2.0 / max(cp.w - 1.0, 1.0);
-  float minStep = 0.3 * texel / max(length(rd), 1e-9);
-  float t = t0;
-  float f = terrainF(ro + rd * t, tp, cp, lattice);
-  if (f <= 0.0) {
-    if (iv.x >= tmin) {
-      // Entered through a side or the base of the box: the wall of the solid.
-      vec3 p = ro + rd * t;
-      vec3 a = abs(p);
-      if (a.x > 1.0 - 1e-3 && a.x >= a.z) n = vec3(sign(p.x), 0.0, 0.0);
-      else if (a.z > 1.0 - 1e-3) n = vec3(0.0, 0.0, sign(p.z));
-      else n = vec3(0.0, sign(p.y), 0.0);
-      return t;
-    }
-    // Origin inside the solid (precision): step out before searching for a surface.
-    for (int i = 0; i < 24; i++) {
-      t += minStep * 2.0;
-      if (t > t1) return INF;
-      f = terrainF(ro + rd * t, tp, cp, lattice);
-      if (f > 0.0) break;
-    }
-    if (f <= 0.0) return INF;
+  vec2 iv = boxHit(ro, rd, vec3(-1.0, bot, -1.0), vec3(1.0, top, 1.0));
+  float t = max(iv.x, tmin);
+  float end = min(iv.y, tmax);
+  if (t > end) return INF;
+  vec3 p = ro + rd * t;
+  if (iv.x >= tmin && terrainInside(p, tp, cp, lattice)) {
+    n = terrainBoxNormal(p, bot, top);
+    return t;
   }
-  for (int i = 0; i < min(steps, 512); i++) {
-    float tn = min(t + max(f / denom, minStep), t1);
-    float fn = terrainF(ro + rd * tn, tp, cp, lattice);
-    if (fn <= 0.0) {
-      float a = t;
-      float b = tn;
-      for (int k = 0; k < 7; k++) {
-        float mid = 0.5 * (a + b);
-        if (terrainF(ro + rd * mid, tp, cp, lattice) <= 0.0) b = mid; else a = mid;
+
+  // Traverse heightmap cells in ray order. Within each cell the GPU's bilinear
+  // height surface is a quadratic along the ray, so solve it directly. A global
+  // slope bound made every step tiny near cliffs and exhausted the old quality
+  // budget, incorrectly turning valid terrain into transparent holes.
+  float cells = cp.w - 1.0;
+  vec2 grid = (p.xz + 1.0) * (0.5 * cells);
+  vec2 velocity = rd.xz * (0.5 * cells);
+  ivec2 direction = ivec2(sign(velocity));
+  ivec2 cell = ivec2(clamp(floor(grid), vec2(0.0), vec2(cells - 1.0)));
+  for (int axis = 0; axis < 2; axis++) {
+    if (direction[axis] < 0 && grid[axis] == float(cell[axis]) && cell[axis] > 0) cell[axis]--;
+  }
+  float low = lattice ? max(cp.x, 1e-4) : cp.x;
+  // At most 2*(512-1)-1 cells can be crossed in the supported 512x512 grid.
+  // Coverage is independent of render/preview/shadow quality settings.
+  for (int i = 0; i < 1024; i++) {
+    // Derive each boundary from the integer cell and original ray. Repeated
+    // next += delta drifts over a large grid and extrapolates adjacent patches.
+    vec2 next = terrainNextBoundary(cell, direction, ro, rd, cells);
+    float tn = max(t, min(end, min(next.x, next.y)));
+    float span = max(0.0, tn - t);
+    p = ro + rd * t;
+    vec2 uv = (p.xz + 1.0) * (0.5 * cells) - vec2(cell);
+    vec2 dv = velocity * span;
+    int layer = int(tp.x);
+    float h00 = texelFetch(uTerrain, ivec3(cell, layer), 0).r;
+    float h10 = texelFetch(uTerrain, ivec3(cell + ivec2(1, 0), layer), 0).r;
+    float h01 = texelFetch(uTerrain, ivec3(cell + ivec2(0, 1), layer), 0).r;
+    float h11 = texelFetch(uTerrain, ivec3(cell + ivec2(1, 1), layer), 0).r;
+    float hx = h10 - h00;
+    float hz = h01 - h00;
+    float crossTerm = h11 - h10 - h01 + h00;
+    vec3 h = vec3(crossTerm * dv.x * dv.y,
+      hx * dv.x + hz * dv.y + crossTerm * dot(uv, dv.yx),
+      h00 + hx * uv.x + hz * uv.y + crossTerm * uv.x * uv.y);
+    vec3 y = vec3(0.0, rd.y * span, p.y);
+    float scale = lattice ? 1.0 : 2.0;
+    float offset = lattice ? 0.0 : -1.0;
+    float best = terrainRootInRange(y - h * scale - vec3(0.0, 0.0, offset), h, low, cp.y);
+    int face = 0;
+    float cap = terrainRootInRange(y - vec3(0.0, 0.0, scale * cp.y + offset), h, max(low, cp.y), 1.0);
+    if (cap < best) { best = cap; face = 1; }
+    float lower;
+    if (lattice) {
+      lower = terrainRootInRange(y + h, h, low, cp.y);
+      if (lower < best) { best = lower; face = 2; }
+      lower = terrainRootInRange(y + vec3(0.0, 0.0, cp.y), h, max(low, cp.y), 1.0);
+      if (lower < best) { best = lower; face = 3; }
+      // A plateau exactly at clipLow is retained, not a clipping wall along
+      // its whole interior. Only a varying height can cross that contour.
+      if (h.x != 0.0 || h.y != 0.0) {
+        float wall = terrainRootInRange(h - vec3(0.0, 0.0, low), y, -min(low, cp.y), min(low, cp.y));
+        if (wall < best) { best = wall; face = 4; }
       }
-      n = terrainNormal(ro + rd * b, tp, cp, lattice);
-      return b;
+    } else {
+      lower = terrainRootInRange(y - vec3(0.0, 0.0, bot), h, low, 1.0);
+      if (lower < best) { best = lower; face = 3; }
     }
-    if (tn >= t1) return INF;
+    if (best < INF) {
+      float hit = t + span * best;
+      n = terrainNormal(ro + rd * hit, tp, cp, lattice);
+      if (face == 1) n = vec3(0.0, 1.0, 0.0);
+      if (face == 3) n = vec3(0.0, -1.0, 0.0);
+      if (face == 4) {
+        vec2 at = uv + dv * best;
+        n = normalize(vec3(-(hx + crossTerm * at.y), 0.0, -(hz + crossTerm * at.x)) + vec3(1e-12, 0.0, 0.0));
+      }
+      return hit;
+    }
+    if (tn >= end) break;
+    // Cross both axes together at a corner; never skip the next cell with a
+    // distance epsilon (which would lose narrow peaks at high resolution).
+    bvec2 advance = lessThanEqual(next, vec2(tn));
+    if (advance.x) cell.x += direction.x;
+    if (advance.y) cell.y += direction.y;
+    if (cell.x < 0 || cell.y < 0 || cell.x >= int(cells) || cell.y >= int(cells)) break;
     t = tn;
-    f = fn;
+  }
+  p = ro + rd * end;
+  if (iv.y <= tmax && terrainInside(p, tp, cp, lattice)) {
+    n = terrainBoxNormal(p, bot, top);
+    return end;
   }
   return INF;
 }
@@ -419,8 +531,7 @@ bool hitObject(int i, vec3 ro, vec3 rd, float tmax, bool shadow, out float t, ou
   else if (type == T_DISC) tt = hitFlat(o, d, 0.0, tmax, true, no);
   else if (type == T_SQUARE) tt = hitFlat(o, d, 0.0, tmax, false, no);
   else if (type == T_TERRAIN || type == T_LATTICE) {
-    int steps = shadow ? (Q_TERRAIN_STEPS * 2) / 3 : Q_TERRAIN_STEPS;
-    tt = hitTerrain(o, d, 0.0, tmax, objFetch(i, OBJ_P0), objFetch(i, OBJ_P1), type == T_LATTICE, steps, no);
+    tt = hitTerrain(o, d, 0.0, tmax, objFetch(i, OBJ_P0), objFetch(i, OBJ_P1), type == T_LATTICE, no);
   } else if (type == T_TORUS || type == T_STONE || type == T_TREE) {
     tt = hitSDF(type, o, d, 0.0, tmax, objFetch(i, OBJ_P0), objFetch(i, OBJ_P1), Q_SDF_STEPS, no, part);
   }

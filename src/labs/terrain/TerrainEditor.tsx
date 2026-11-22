@@ -9,7 +9,7 @@ import type { TerrainData } from '@/core/types';
 import { Button, DragValue, IconButton, LabFrame, Select, Toggle } from '@/ui/kit';
 import { createTerrainData, TERRAIN_RESOLUTIONS, withEditedHeights, type BrushSettings } from '@/terrain';
 import { getGenerator } from '@/terrain/generators';
-import { randomSeed, runOpAction, type EditorContext, type LastAction, type PreviewControl } from './actions';
+import { randomSeed, runOpAction, withCurrentClipping, type EditorContext, type LastAction, type PreviewControl } from './actions';
 import { AdjustPanel } from './AdjustPanel';
 import { BrushPanel } from './BrushPanel';
 import type { CanvasLook } from './canvasPaint';
@@ -66,7 +66,6 @@ export function TerrainEditor() {
   const [seedDraft, setSeedDraft] = useState<number | null>(null);
   const pickingRef = useRef(false);
   const readoutRef = useRef<HTMLSpanElement>(null);
-  const clipStart = useRef<TerrainData | null>(null);
   const { ref: fitRef, size } = useSquareSize<HTMLDivElement>(CLIP_WIDTH);
 
   // The heights on screen: the terrain, or a tab's live preview of an effect.
@@ -149,10 +148,10 @@ export function TerrainEditor() {
       if (base.recipe) {
         const recipe = { ...base.recipe, resolution: res };
         const h = await compute({ kind: 'recipe', recipe });
-        if (h) ws.commit({ ...base, resolution: res, heights: h, recipe });
+        if (h) ws.commit(withCurrentClipping({ ...base, resolution: res, heights: h, recipe }, ws.current()));
       } else {
         const h = await compute({ kind: 'resample', heights: base.heights, from: base.resolution, to: res });
-        if (h) ws.commit({ ...base, resolution: res, heights: h });
+        if (h) ws.commit(withCurrentClipping({ ...base, resolution: res, heights: h }, ws.current()));
       }
       setLast(null);
     });
@@ -167,7 +166,7 @@ export function TerrainEditor() {
         const recipe = { ...base.recipe, seed };
         const h = await compute({ kind: 'recipe', recipe });
         if (!h) return;
-        ws.commit({ ...base, heights: h, recipe });
+        ws.commit(withCurrentClipping({ ...base, heights: h, recipe }, ws.current()));
         setLast(null);
         setSeedDraft(null);
       },
@@ -176,14 +175,9 @@ export function TerrainEditor() {
   };
 
   const clip = {
-    start: () => {
-      clipStart.current = ws.current();
-    },
+    start: ws.beginClipGesture,
     change: (lo: number, hi: number) => ws.replace({ ...ws.current(), clipLow: lo, clipHigh: hi }),
-    end: () => {
-      if (clipStart.current) ws.commit(ws.current(), clipStart.current);
-      clipStart.current = null;
-    },
+    end: ws.endClipGesture,
   };
 
   // --- keyboard --------------------------------------------------------------
@@ -229,8 +223,12 @@ export function TerrainEditor() {
   }, []);
 
   // --- confirm / cancel --------------------------------------------------------
-  const close = useCallback(() => useStore.getState().closeLab(), []);
+  const close = useCallback(() => {
+    ws.dispose();
+    useStore.getState().closeLab();
+  }, [ws]);
   const confirm = useCallback(() => {
+    if (ws.isBusy()) return;
     const t = ws.current();
     const s = useStore.getState();
     if (targetId && getObject(targetId)) {
@@ -238,6 +236,7 @@ export function TerrainEditor() {
     } else if (!targetId) {
       s.createObject('terrain', { terrain: t });
     }
+    ws.dispose();
     s.closeLab();
   }, [ws, targetId, original]);
 
@@ -273,10 +272,10 @@ export function TerrainEditor() {
           Hand-edited
         </span>
       )}
-      <IconButton hint="Undo (Ctrl+Z)" onClick={ws.undo} disabled={!ws.canUndo} size={30}>
+      <IconButton hint="Undo (Ctrl+Z)" onClick={ws.undo} disabled={!ws.canUndo || ws.pending} size={30}>
         ↶
       </IconButton>
-      <IconButton hint="Redo (Shift+Ctrl+Z)" onClick={ws.redo} disabled={!ws.canRedo} size={30}>
+      <IconButton hint="Redo (Shift+Ctrl+Z)" onClick={ws.redo} disabled={!ws.canRedo || ws.pending} size={30}>
         ↷
       </IconButton>
     </div>
@@ -285,7 +284,7 @@ export function TerrainEditor() {
   const showAdjust = tab === 'elevation' && last && last.result === terrain;
 
   return (
-    <LabFrame title="Terrain Editor" tabs={TABS} tab={tab} onTab={setTab} headerExtra={headerExtra} onConfirm={confirm} onCancel={close} className="te-lab">
+    <LabFrame title="Terrain Editor" tabs={TABS} tab={tab} onTab={setTab} headerExtra={headerExtra} onConfirm={confirm} confirmDisabled={ws.pending} onCancel={close} className="te-lab">
       <div className="te-room">
         <BrushPanel brush={brush} onChange={setBrush} showBrush={showBrush} onShowBrush={setShowBrush} rampCss={barCss} />
         <section className="te-stage">
