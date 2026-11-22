@@ -47,9 +47,12 @@ and press **Ctrl/Cmd+M** to edit its material. The large chrome ball at lower le
 the scene gallery. Use **File → Share Link** to send someone a copy of your scene.
 
 For the browser integration check, start the app or production preview in another terminal, then run
-`npm run test:browser -- http://localhost:5173/`. This requires installed Google Chrome and checks the
+`npm run test:browser -- http://localhost:5173/`. This defaults to installed Google Chrome and checks the
 labs, rendering, PNG encoding, scene download/open, share links, libraries and compact layout. It saves
-screenshots and downloads under `/tmp/bryce-smoke`.
+screenshots and downloads under `/tmp/bryce-smoke-<browser>`. Use `BROWSER=firefox` or `BROWSER=webkit`
+with the corresponding Playwright browser installed; `BROWSER_EXECUTABLE_PATH` can select an existing
+browser executable. Any unavailable WebGL rendering or incompatible Firefox download protocol is
+explicitly reported as skipped; supported rendering must pass the image checks.
 
 With the development server running, `npm run test:terrain -- http://localhost:5173/` checks terrain
 intersections directly on the GPU, including steep Mosaic terrain and clipped surfaces.

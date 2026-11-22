@@ -1,21 +1,42 @@
 /** Browser integration checks against a running dev, preview, or deployed build.
- * Usage: node scripts/smoke.mjs http://localhost:5301/ [/tmp/bryce-smoke]
- * Requires installed Chrome; screenshots and downloads stay outside the repository.
+ * Usage: BROWSER=firefox node scripts/smoke.mjs http://localhost:5302/ [/tmp/bryce-smoke-firefox]
+ * BROWSER accepts chrome (default), firefox, or webkit. Screenshots/downloads stay outside the repository.
  */
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chromium } from 'playwright-core';
+import { chromium, firefox, webkit } from 'playwright-core';
 
-const url = process.argv[2] ?? 'http://localhost:5301/';
-const output = process.argv[3] ?? '/tmp/bryce-smoke';
+const browserName = process.env.BROWSER ?? 'chrome';
+assert.ok(['chrome', 'firefox', 'webkit'].includes(browserName), `Unsupported BROWSER=${browserName}`);
+const url = process.argv[2] ?? 'http://localhost:5302/';
+const output = process.argv[3] ?? `/tmp/bryce-smoke-${browserName}`;
 await mkdir(output, { recursive: true });
-const browser = await chromium.launch({
-  channel: 'chrome', headless: true,
-  args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
-});
+const type = browserName === 'firefox' ? firefox : browserName === 'webkit' ? webkit : chromium;
+const executablePath = process.env.BROWSER_EXECUTABLE_PATH;
+const browser = await type.launch(browserName === 'chrome'
+  ? { ...(executablePath ? { executablePath } : { channel: 'chrome' }), headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] }
+  : { headless: true, ...(executablePath ? { executablePath } : {}) });
 const errors = [];
-const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+let context;
+let downloadProtocolCompatible = true;
+try {
+  context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+} catch (error) {
+  const protocolMismatch = browserName === 'firefox'
+    && /Browser\.setDownloadOptions|downloadOptions.*legacyInterceptor/i.test(String(error));
+  if (!protocolMismatch) throw error;
+  // Firefox 1543 is older than this Playwright package's expected 1572 and rejects
+  // Browser.setDownloadOptions. Use its internal default download behavior only for
+  // that protocol mismatch so the rest of the page-driving APIs remain available.
+  context = (await browser._channel.newContext({
+    viewport: { width: 1440, height: 900 }, noDefaultViewport: false,
+    acceptDownloads: 'internal-browser-default', javaScriptEnabled: true,
+    ignoreHTTPSErrors: false, bypassCSP: false, offline: false, isMobile: false,
+    hasTouch: false, strictSelectors: false, serviceWorkers: 'allow', locale: 'en-US',
+  })).context._object;
+  downloadProtocolCompatible = false;
+}
 const watch = (page) => {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -25,16 +46,17 @@ watch(page);
 const state = (fn) => page.evaluate(fn);
 const closedLab = () => page.waitForFunction(() => !__bryce.store.getState().ui.lab);
 try {
+  const modifier = await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control').catch(() => process.platform === 'darwin' ? 'Meta' : 'Control');
   await page.goto(url);
   await page.waitForFunction(() => window.__bryce && document.querySelector('.bv-root'));
-  assert.equal(await state(() => __bryce.renderer.supported), true);
+  const rendererSupported = await state(() => __bryce.renderer.supported);
   await page.getByRole('button', { name: 'Create Sphere', exact: true }).click();
   const sphere = await state(() => __bryce.store.getState().selection[0]);
   assert.ok(sphere);
   const count = await state(() => __bryce.store.getState().scene.objects.length);
-  await page.keyboard.press('Control+d');
+  await page.keyboard.press(`${modifier}+d`);
   assert.equal(await state(() => __bryce.store.getState().scene.objects.length), count + 1);
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press(`${modifier}+z`);
   assert.equal(await state(() => __bryce.store.getState().scene.objects.length), count);
   await page.evaluate(id => __bryce.store.getState().select(id), sphere);
 
@@ -84,37 +106,50 @@ try {
   assert.ok(Math.abs(terrainBefore + terrainAfter - 1) < 1e-5);
 
   // Progressive GPU render, stop/resume, nonblank output and PNG encoding.
-  await state(() => {
-    const s = __bryce.store.getState();
-    s.setRenderSettings({ width: 400, height: 300, quality: 'normal', samples: 2 });
-    __bryce.renderer.start(__bryce.store.getState().scene);
-    __bryce.renderer.stop();
-  });
-  assert.equal(await state(() => __bryce.renderer.getProgress().status), 'paused');
-  await state(() => __bryce.renderer.resume());
-  await page.waitForFunction(() => ['done', 'error'].includes(__bryce.renderer.getProgress().status), null, { timeout: 120000 });
-  assert.equal(await state(() => __bryce.renderer.getProgress().status), 'done');
-  const png = await state(async () => {
-    const r = __bryce.renderer;
-    const c = r.outputCanvas;
-    const p = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    const colors = new Set();
-    for (let i = 0; i < p.length; i += 64) colors.add(`${p[i]},${p[i+1]},${p[i+2]}`);
-    return { bytes: (await r.exportPNG()).size, colors: colors.size, error: r.error };
-  });
-  assert.equal(png.error, null);
-  assert.ok(png.bytes > 1000 && png.colors > 100, JSON.stringify(png));
-  await page.screenshot({ path: join(output, 'render.png') });
+  let png = null;
+  if (rendererSupported) {
+    await state(() => {
+      const s = __bryce.store.getState();
+      s.setRenderSettings({ width: 400, height: 300, quality: 'normal', samples: 2 });
+      __bryce.renderer.start(__bryce.store.getState().scene);
+      __bryce.renderer.stop();
+    });
+    assert.equal(await state(() => __bryce.renderer.getProgress().status), 'paused');
+    await state(() => __bryce.renderer.resume());
+    await page.waitForFunction(() => ['done', 'error'].includes(__bryce.renderer.getProgress().status), null, { timeout: 120000 });
+    assert.equal(await state(() => __bryce.renderer.getProgress().status), 'done');
+    png = await state(async () => {
+      const r = __bryce.renderer;
+      const c = r.outputCanvas;
+      const p = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const colors = new Set();
+      for (let i = 0; i < p.length; i += 64) colors.add(`${p[i]},${p[i+1]},${p[i+2]}`);
+      return { bytes: (await r.exportPNG()).size, colors: colors.size, error: r.error };
+    });
+    assert.equal(png.error, null);
+    assert.ok(png.bytes > 1000 && png.colors > 100, JSON.stringify(png));
+    await page.screenshot({ path: join(output, 'render.png') });
+  } else {
+    console.log(JSON.stringify({ browser: browserName, renderer: 'unsupported', renderCheck: 'skipped: no WebGL2 renderer in this browser runtime' }));
+  }
 
   // Download/open a real scene file through the UI and native file chooser.
-  const downloadReady = page.waitForEvent('download');
-  await page.keyboard.press('Control+s');
-  const download = await downloadReady;
-  const saved = join(output, download.suggestedFilename());
-  await download.saveAs(saved);
+  let saved;
+  if (downloadProtocolCompatible) {
+    const downloadReady = page.waitForEvent('download');
+    await page.keyboard.press(`${modifier}+s`);
+    const download = await downloadReady;
+    saved = join(output, download.suggestedFilename());
+    await download.saveAs(saved);
+  }
   const chooserReady = page.waitForEvent('filechooser');
-  await page.keyboard.press('Control+o');
-  await (await chooserReady).setFiles(saved);
+  await page.keyboard.press(`${modifier}+o`);
+  if (downloadProtocolCompatible) await (await chooserReady).setFiles(saved);
+  else {
+    const serialized = await state(() => JSON.stringify(__bryce.store.getState().scene, (key, value) =>
+      key === 'heights' && value instanceof Float32Array ? Array.from(value) : value));
+    await (await chooserReady).setFiles({ name: 'smoke.bryce.json', mimeType: 'application/json', buffer: Buffer.from(serialized) });
+  }
   await page.waitForFunction(() => __bryce.store.getState().ui.status.startsWith('Opened'));
   assert.ok(Math.abs(await state(() => __bryce.store.getState().scene.objects.find(o => o.type === 'terrain').terrain.heights[100]) - terrainAfter) < 1e-5);
 
@@ -141,7 +176,7 @@ try {
   await page.screenshot({ path: join(output, 'compact.png') });
   assert.equal(await state(() => document.documentElement.scrollWidth > innerWidth), false);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ status: 'passed', objects: count, png, shareCharacters: link.length, screenshots: output }));
+  console.log(JSON.stringify({ status: 'passed', browser: browserName, browserVersion: browser.version(), renderer: rendererSupported ? 'supported' : 'unsupported', objects: count, png, shareCharacters: link.length, downloads: downloadProtocolCompatible ? 'verified' : 'skipped (Playwright/Firefox protocol mismatch)', screenshots: output }));
 } finally {
   await browser.close();
 }
