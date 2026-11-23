@@ -7,7 +7,7 @@
 import { DEG, clamp, linearToSrgb, smoothstep, srgbToLinear, sunDirection } from '@/core/math';
 import type { CloudLayer, RGB, Sky } from '@/core/types';
 import { luma, mixRgb, mulRgb, scaleRgb } from './color';
-import { fbm } from './noise';
+import { fbm, valueNoise } from './noise';
 
 export interface SkyLook {
   zenith: RGB;
@@ -70,6 +70,10 @@ export interface CloudParams {
   oz: number;
   octaves: number;
   seed: number;
+  /** 0..1 (CloudLayer turbulence / 100). */
+  turbulence: number;
+  /** 0..1 (CloudLayer glow / 100). */
+  glow: number;
 }
 
 export function cloudParams(layer: CloudLayer, kind: 'stratus' | 'cumulus'): CloudParams | null {
@@ -86,13 +90,34 @@ export function cloudParams(layer: CloudLayer, kind: 'stratus' | 'cumulus'): Clo
     oz: layer.offset[1],
     octaves: kind === 'stratus' ? 3 : 4,
     seed: kind === 'stratus' ? 11 : 29,
+    turbulence: clamp(layer.turbulence, 0, 100) / 100,
+    glow: clamp(layer.glow, 0, 100) / 100,
   };
 }
 
 /** Cloud density 0..1 of a layer at a point of its (horizontal) plane, plus a thickness term. */
 export function cloudDensityAt(p: CloudParams, x: number, z: number): { density: number; thick: number } {
-  const n = fbm((x + p.ox) * p.scale / p.stretch, (z + p.oz) * p.scale, p.octaves, 0.55, p.seed);
-  const spread = clamp((n - 0.5) * 2.4 + 0.5, 0, 1);
+  let u = (x + p.ox) * p.scale / p.stretch;
+  let v = (z + p.oz) * p.scale;
+  let n: number;
+  let swing = 0;
+  if (p.turbulence > 0) {
+    // Like the renderer's torn layers: a bending / breaking / fraying warp (stratus streaks run
+    // along u, so they bend across and break along it; cumulus tears every way), a finer
+    // octave, and dense and empty stretches.
+    const t = p.turbulence * (2 - p.turbulence);
+    const s = p.seed;
+    const across = p.stretch > 1;
+    const du = (valueNoise(u * 0.3, v * 0.3, s + 101) - 0.5) * (across ? 0.6 : 1.2) + (valueNoise(u * 1.1, v * 1.1, s + 103) - 0.5) * (across ? 1.4 : 0.6) + (valueNoise(u * 3.2, v * 3.2, s + 105) - 0.5) * 0.3;
+    const dv = (valueNoise(u * 0.3, v * 0.3, s + 102) - 0.5) * (across ? 3 : 1.2) + (valueNoise(u * 1.1, v * 1.1, s + 104) - 0.5) * (across ? 0.5 : 0.6) + (valueNoise(u * 3.2, v * 3.2, s + 106) - 0.5) * 0.3;
+    swing = (smoothstep(0.25, 0.75, valueNoise(u * 0.25, v * 0.6, s + 107)) - 0.6) * 0.8 * t;
+    u += du * t;
+    v += dv * t;
+    n = fbm(u, v, p.octaves, 0.55, p.seed) + (valueNoise(u * 9.1, v * 9.1, s + 108) - 0.5) * 0.06 * t;
+  } else {
+    n = fbm(u, v, p.octaves, 0.55, p.seed);
+  }
+  const spread = clamp((n - 0.5) * 2.4 + 0.5 + swing, 0, 1);
   const density = smoothstep(p.threshold - p.softness, p.threshold + p.softness, spread);
   return { density, thick: smoothstep(p.threshold, p.threshold + 0.4, spread) };
 }
@@ -158,7 +183,13 @@ export function makeSkySampler(sky: Sky, opts: { clouds?: boolean } = {}): SkySa
       if (a <= 0.001) continue;
       const shade = (1 - p.shading * 0.6 * thick) * nightDim;
       const lit = sunVis * 0.25 * look.daylight;
-      const silver = glowAmt * 0.6 * Math.exp(-((ang / (glowW * 1.5)) ** 2)) * sunVis;
+      let silver = glowAmt * 0.6 * Math.exp(-((ang / (glowW * 1.5)) ** 2)) * sunVis;
+      if (p.glow > 0) {
+        // The layer's own sun glow lighting (as in the renderer): smooth lobes around the sun,
+        // added in the sun color, brightest in thin parts and at edges.
+        const c = Math.max(cosA, 0);
+        silver += p.glow * glowAmt * sunVis * (0.3 * c ** 8 + 1.4 * c ** 20 + 2.4 * c ** 200) * (1 - 0.85 * density) * 0.8;
+      }
       const cr = p.color[0] * shade * (1 - lit + lit * sky.sunColor[0]) + sky.sunColor[0] * silver;
       const cg = p.color[1] * shade * (1 - lit + lit * sky.sunColor[1]) + sky.sunColor[1] * silver;
       const cb = p.color[2] * shade * (1 - lit + lit * sky.sunColor[2]) + sky.sunColor[2] * silver;

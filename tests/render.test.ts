@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRenderSettings, createObject } from '@/core/defaults';
+import type { RenderSettings } from '@/core/types';
 import { emptyScene } from '@/scenes/defaultScene';
 import { MAX_OBJECTS, OBJ_TEXELS } from '@/render/layout';
 import { packScene } from '@/render/pack';
 import { PreviewQueue } from '@/render/previewQueue';
-import { mainQuality } from '@/render/quality';
-import { BandController, extendPasses, planPasses, regionToPixels, totalWork } from '@/render/scheduler';
+import { MAX_FILTER_RADIUS, filterKernel, mainQuality, previewQuality, softnessSigma, type FilterKernel } from '@/render/quality';
+import { BandController, edgeMasked, extendPasses, planPasses, regionToPixels, totalWork } from '@/render/scheduler';
+import { traceFragment } from '@/render/shaders';
 
 describe('progressive render scheduling', () => {
   it('resolves the mosaic before accumulating full pixel samples, then resumes with new samples', () => {
@@ -36,6 +38,49 @@ describe('progressive render scheduling', () => {
     const premium = mainQuality({ ...defaults, quality: 'premium', samples: 8 });
     expect(premium.samples).toBe(32);
     expect(premium.maxRays).toBeLessThanOrEqual(16);
+  });
+
+  it('traces only edge-masked pixels after the first sample pass, resumed passes included', () => {
+    const passes = extendPasses(planPasses(true, 3), 2);
+    expect(passes.map((p) => edgeMasked(p, true))).toEqual([false, false, false, false, false, true, true, true, true]);
+    expect(passes.some((p) => edgeMasked(p, false))).toBe(false);
+    expect(planPasses(false, 1).some((p) => edgeMasked(p, true))).toBe(false);
+  });
+
+  it('maps anti-aliasing and softness to the tracer, keeping previews full and unfiltered', () => {
+    const defaults = defaultRenderSettings();
+    const q = mainQuality(defaults);
+    expect(q.edgesOnly).toBe(false);
+    expect(q.filterSigma).toBeCloseTo(0.45);
+    expect(mainQuality({ ...defaults, antialias: 'edges', softness: 0 })).toMatchObject({ edgesOnly: true, filterSigma: 0 });
+    expect(mainQuality({ ...defaults, quality: 'draft', softness: 100 }).filterSigma).toBe(1.5);
+    // Scenes handed to the renderer without normalization (built before these settings) read as the defaults.
+    const legacy = mainQuality({ ...defaults, antialias: undefined, softness: undefined } as unknown as RenderSettings);
+    expect(legacy.edgesOnly).toBe(false);
+    expect(legacy.filterSigma).toBeCloseTo(0.45);
+    for (const p of ['nano', 'preview', 'icon'] as const) expect(previewQuality(p)).toMatchObject({ edgesOnly: false, filterSigma: 0 });
+  });
+
+  it('builds a normalized Gaussian for the soft pixel filter, the identity at softness 0', () => {
+    const sum = (k: FilterKernel) => k.weights.reduce((s, w, i) => s + (i ? 2 * w : w), 0);
+    const none = filterKernel(softnessSigma(0));
+    expect(none.radius).toBe(0);
+    expect(Array.from(none.weights)).toEqual([1, ...new Array(MAX_FILTER_RADIUS).fill(0)]);
+    const soft = filterKernel(softnessSigma(30));
+    expect(soft.radius).toBe(2);
+    expect(sum(soft)).toBeCloseTo(1, 6);
+    const widest = filterKernel(softnessSigma(100));
+    expect(widest.radius).toBe(MAX_FILTER_RADIUS);
+    expect(sum(widest)).toBeCloseTo(1, 6);
+    for (let i = 1; i <= widest.radius; i++) expect(widest.weights[i]).toBeLessThan(widest.weights[i - 1]);
+    expect(widest.weights[0]).toBeLessThan(soft.weights[0]);
+    expect(filterKernel(99)).toEqual(widest);
+    expect(softnessSigma(400)).toBe(1.5);
+  });
+
+  it('writes the pass weight as the trace alpha, and still salts the shader for cold-compile runs', () => {
+    expect(traceFragment()).toContain('outColor = vec4(max(col, vec3(0.0)), uWeight);');
+    expect(traceFragment(0.5)).not.toBe(traceFragment());
   });
 });
 

@@ -163,6 +163,9 @@ function normalizeCloud(raw: unknown, d: CloudLayer): CloudLayer {
     color: rgb(raw.color, d.color),
     shading: num(raw.shading, d.shading, 0, 1),
     offset: off,
+    // Added later: files and links from before them read as 0 (the plain, unlit pattern).
+    turbulence: num(raw.turbulence, 0, 0, 100),
+    glow: num(raw.glow, 0, 0, 100),
   };
 }
 
@@ -218,6 +221,9 @@ export function normalizeRender(raw: unknown): RenderSettings {
     maxBounces: int(raw.maxBounces, d.maxBounces, 1, 12),
     samples: int(raw.samples, d.samples, 1, 1024),
     exposure: num(raw.exposure, d.exposure, 0.5, 2),
+    // Added later: files and links from before them take the defaults (edge-only AA, softness 30).
+    antialias: pick(raw.antialias, ['edges', 'full'] as const, d.antialias),
+    softness: num(raw.softness, d.softness, 0, 100),
   };
 }
 

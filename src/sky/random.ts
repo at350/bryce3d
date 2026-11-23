@@ -1,7 +1,8 @@
 /**
  * Random sky generator (the Sky & Fog "dice"). A seed picks a mood (day, golden hour,
  * night, alien, weather), then a harmonious palette and sun / cloud / fog values in
- * ranges that keep the result attractive. Deterministic for a given seed.
+ * ranges that keep the result attractive; some rolls tear the clouds into streaks or let the
+ * sun's glow light them. Deterministic for a given seed.
  */
 import { mulberry32, randomSeed } from '@/core/math';
 import type { CloudLayer, RGB, Sky } from '@/core/types';
@@ -294,6 +295,25 @@ function weatherSky(t: Tools): Partial<Sky> {
   }
 }
 
+/** Chances that a layer rolls torn (turbulence) or sun-lit (glow) clouds, by mood. */
+const STYLE_CHANCE: Record<RandomSkyKind, { torn: number; glow: number }> = {
+  day: { torn: 0.35, glow: 0.25 },
+  golden: { torn: 0.5, glow: 0.7 },
+  night: { torn: 0.3, glow: 0 },
+  alien: { torn: 0.5, glow: 0.5 },
+  weather: { torn: 0.45, glow: 0.15 },
+};
+
+function styleClouds(t: Tools, kind: RandomSkyKind, sky: Sky): Pick<Sky, 'stratus' | 'cumulus'> {
+  const { torn, glow } = STYLE_CHANCE[kind];
+  const style = (layer: CloudLayer, tornRange: [number, number]): CloudLayer => ({
+    ...layer,
+    turbulence: layer.enabled && t.chance(torn) ? t.range(...tornRange) : 0,
+    glow: layer.enabled && t.chance(glow) ? t.range(30, 90) : 0,
+  });
+  return { stratus: style(sky.stratus, [25, 85]), cumulus: style(sky.cumulus, [15, 60]) };
+}
+
 const BUILDERS: Record<RandomSkyKind, (t: Tools) => Partial<Sky>> = {
   day: daySky,
   golden: goldenSky,
@@ -317,5 +337,7 @@ export function randomSky(seed: number = randomSeed(), kind?: RandomSkyKind): Sk
   const chosen = kind ?? pickKind(r);
   const t = tools(r);
   const sky: Sky = { ...defaultSky(), linkSunToView: false, rainbow: false, ...BUILDERS[chosen](t) };
-  return sanitizeSky(sky);
+  // Cloud style rolls from its own stream, so the rest of a seed's sky is what it always was.
+  const styled = { ...sky, ...styleClouds(tools(mulberry32(seed ^ 0x2c1b3c6d)), chosen, sky) };
+  return sanitizeSky(styled);
 }

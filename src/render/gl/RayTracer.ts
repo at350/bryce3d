@@ -1,8 +1,10 @@
 /**
  * Owns the private WebGL2 context: capability checks, programs, the noise texture, the
- * terrain cache, float render targets, and the four draw operations (trace a band, splat
- * mosaic blocks, display with tone mapping, copy to a 2D canvas).
+ * terrain cache, float render targets, and the draw operations (trace a band, splat mosaic
+ * blocks, build an edge mask, display with tone mapping and the soft pixel filter, copy to a
+ * 2D canvas).
  */
+import type { FilterKernel } from '../quality';
 import type { Rect } from '../scheduler';
 import { programSources } from '../shaders';
 import { ProgramSet } from './programs';
@@ -25,7 +27,7 @@ export interface TraceUniforms {
   quality: Float32Array;
 }
 
-const TEX = { objects: 0, materials: 1, lights: 2, terrain: 3, noise: 4 } as const;
+const TEX = { objects: 0, materials: 1, lights: 2, terrain: 3, noise: 4, mask: 5 } as const;
 
 export class RayTracer {
   readonly canvas: HTMLCanvasElement;
@@ -186,8 +188,11 @@ export class RayTracer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
-  /** Trace the scissored rect of a target. frame = uFrame (8 floats). blendAlpha null = overwrite. */
-  traceBand(scene: SceneGPU, u: TraceUniforms, frame: Float32Array, target: RenderTarget, rect: Rect, blendAlpha: number | null): void {
+  /**
+   * Trace the scissored rect of a target. frame = uFrame (8 floats). blendAlpha null = overwrite.
+   * With a mask (an edgeMask() target the size of `target`), only the pixels it marks are traced.
+   */
+  traceBand(scene: SceneGPU, u: TraceUniforms, frame: Float32Array, target: RenderTarget, rect: Rect, blendAlpha: number | null, mask: RenderTarget | null = null): void {
     const gl = this.gl;
     const p = this.programs.use('trace');
     const loc = (n: string) => this.programs.uniform(p, n);
@@ -201,11 +206,17 @@ export class RayTracer {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.terrains.texture);
     gl.activeTexture(gl.TEXTURE0 + TEX.noise);
     gl.bindTexture(gl.TEXTURE_3D, this.noise);
+    // Without a mask the unit holds a placeholder (it is never read), so no sampler's unit is empty.
+    gl.activeTexture(gl.TEXTURE0 + TEX.mask);
+    gl.bindTexture(gl.TEXTURE_2D, mask ? mask.tex : scene.objects);
     gl.uniform1i(loc('uObjects'), TEX.objects);
     gl.uniform1i(loc('uMaterials'), TEX.materials);
     gl.uniform1i(loc('uLights'), TEX.lights);
     gl.uniform1i(loc('uTerrain'), TEX.terrain);
     gl.uniform1i(loc('uNoise'), TEX.noise);
+    gl.uniform1i(loc('uMask'), TEX.mask);
+    gl.uniform1i(loc('uMasked'), mask ? 1 : 0);
+    gl.uniform1f(loc('uWeight'), blendAlpha ?? 1);
     gl.uniform1i(loc('uObjectCount'), scene.objectCount);
     gl.uniform1i(loc('uLightCount'), scene.lightCount);
     gl.uniform4fv(loc('uSky'), u.sky);
@@ -216,11 +227,12 @@ export class RayTracer {
     gl.viewport(0, 0, target.w, target.h);
     gl.enable(gl.SCISSOR_TEST);
     gl.scissor(rect.x, rect.y, rect.w, rect.h);
-    // Blending stays enabled for every trace draw (alpha 1 = overwrite) so the driver builds a
-    // single pipeline state for the big shader instead of one per blend mode.
+    // Blending stays enabled for every trace draw (weight 1 = overwrite) so the driver builds a
+    // single pipeline state for the big shader instead of one per blend mode. The shader's alpha
+    // is the pass weight w: color = src * w + dst * (1 - w), and the coverage alpha
+    // w + dst.a * (1 - w) stays 1 once a pixel is rendered (a pixel the mask skips writes w = 0).
     gl.enable(gl.BLEND);
-    gl.blendColor(0, 0, 0, blendAlpha ?? 1);
-    gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.BLEND);
@@ -245,15 +257,62 @@ export class RayTracer {
     gl.disable(gl.SCISSOR_TEST);
   }
 
-  /** Tone-map w x h texels of `source` into the bottom-left of the default framebuffer. */
-  display(source: RenderTarget, w: number, h: number, exposure: number): void {
+  /**
+   * Mark (1) the pixels of `rect` in `mask` (an R8 target the size of `source`) whose displayed
+   * color, 3x3-median filtered, differs from one of their 8 neighbours inside `rect` by more than
+   * `threshold`, or whose unfiltered displayed color differs by more than `strong`.
+   */
+  edgeMask(source: RenderTarget, mask: RenderTarget, rect: Rect, exposure: number, threshold: number, strong: number): void {
+    const gl = this.gl;
+    const p = this.programs.use('edges');
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source.tex);
+    gl.uniform1i(this.programs.uniform(p, 'uAccum'), 0);
+    gl.uniform4f(this.programs.uniform(p, 'uEdge'), exposure, threshold, strong, 0);
+    gl.uniform4i(this.programs.uniform(p, 'uRegion'), rect.x, rect.y, rect.x + rect.w - 1, rect.y + rect.h - 1);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, mask.fbo);
+    gl.viewport(0, 0, mask.w, mask.h);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(rect.x, rect.y, rect.w, rect.h);
+    gl.disable(gl.BLEND);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disable(gl.SCISSOR_TEST);
+  }
+
+  /**
+   * Tone-map w x h texels of `source` into the bottom-left of the default framebuffer. With a
+   * filter, the soft pixel filter (a separable Gaussian, see filterKernel()) blends neighbouring
+   * texels in linear light first: its rows go through `filter.scratch` (a w x h target), its
+   * columns run in the display pass.
+   */
+  display(source: RenderTarget, w: number, h: number, exposure: number, filter: { kernel: FilterKernel; scratch: RenderTarget } | null = null): void {
     const gl = this.gl;
     this.ensureCanvas(w, h);
+    const soft = filter && filter.kernel.radius > 0 ? filter : null;
+    if (soft) {
+      const f = this.programs.use('filter');
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, source.tex);
+      gl.uniform1i(this.programs.uniform(f, 'uSource'), 0);
+      gl.uniform1i(this.programs.uniform(f, 'uRadius'), soft.kernel.radius);
+      gl.uniform1fv(this.programs.uniform(f, 'uKernel'), soft.kernel.weights);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, soft.scratch.fbo);
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.SCISSOR_TEST);
+      gl.disable(gl.BLEND);
+      gl.bindVertexArray(this.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
     const p = this.programs.use('display');
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source.tex);
     gl.uniform1i(this.programs.uniform(p, 'uAccum'), 0);
-    gl.uniform4f(this.programs.uniform(p, 'uDisplay'), exposure, Math.random() * 100, 0, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, soft ? soft.scratch.tex : source.tex);
+    gl.uniform1i(this.programs.uniform(p, 'uSoft'), 1);
+    if (soft) gl.uniform1fv(this.programs.uniform(p, 'uKernel'), soft.kernel.weights);
+    gl.uniform4f(this.programs.uniform(p, 'uDisplay'), exposure, Math.random() * 100, 0, soft ? soft.kernel.radius : 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
     gl.disable(gl.SCISSOR_TEST);

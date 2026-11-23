@@ -26,7 +26,8 @@ const SKY_BASE: Raw = {
   fogDensity: 0, fogHeight: 4, fogColor: [0.9, 0.9, 0.92], shadowIntensity: 75, ambient: 35, ambientColor: [0.62, 0.7, 0.85],
   rainbow: false,
 };
-const CLOUD_BASE: Raw = { enabled: true, cover: 40, height: 900, frequency: 100, amplitude: 100, color: [1, 1, 1], shading: 0.5, offset: [0, 0] };
+// turbulence and glow came later; links without them merge to 0, which is what they rendered as.
+const CLOUD_BASE: Raw = { enabled: true, cover: 40, height: 900, frequency: 100, amplitude: 100, color: [1, 1, 1], shading: 0.5, offset: [0, 0], turbulence: 0, glow: 0 };
 const MATERIAL_BASE: Raw = {
   name: 'Default', diffuseColor: [0.78, 0.78, 0.78], ambientColor: [0.5, 0.5, 0.5], specularColor: [1, 1, 1],
   specularHaloColor: [1, 1, 1], transparentColor: [1, 1, 1], volumeColor: [1, 1, 1], diffusion: 80, ambience: 10,
@@ -37,7 +38,8 @@ const COMPONENT_BASE: Raw = {
   type: 'fbm', mapping: 'world', scale: 4, octaves: 6, roughness: 0.5, warp: 0, contrast: 0.5, bias: 0, seed: 1,
   gradient: [{ at: 0, color: [0.2, 0.2, 0.2] }, { at: 1, color: [0.9, 0.9, 0.9] }], bump: 0.5,
 };
-const RENDER_BASE: Raw = { width: 800, height: 600, quality: 'normal', mosaic: true, maxBounces: 6, samples: 12, exposure: 1 };
+// antialias and softness came later; links without them merge to the defaults ('full', 30).
+const RENDER_BASE: Raw = { width: 800, height: 600, quality: 'normal', mosaic: true, maxBounces: 6, samples: 12, exposure: 1, antialias: 'full', softness: 30 };
 const LIGHT_BASE: Raw = { color: [1, 0.95, 0.85], intensity: 100, falloff: 'squared', coneAngle: 45, softness: 0.3, visible: false, castShadows: true };
 const TREE_BASE: Raw = { seed: 0, trunkHeight: 0.45, trunkWidth: 0.1, crown: 'round', crownNoise: 0.5, trunkColor: [0.32, 0.22, 0.14] };
 const STONE_BASE: Raw = { seed: 0, lumpiness: 0.5, roughness: 0.5 };

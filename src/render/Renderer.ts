@@ -3,6 +3,10 @@
  * each frame spends ~12 ms of GPU time on bands of the current pass (Bryce mosaic 16 -> 2 px,
  * then full-resolution sample passes accumulated into a float target), interleaved with
  * small preview jobs. Nothing here blocks the main thread for longer than one band.
+ *
+ * Bryce-style anti-aliasing: with `render.antialias` 'edges', an edge mask is built from the
+ * first full-resolution pass and the later sample passes trace only the pixels it marks. The
+ * main image is presented through the soft pixel filter (`render.softness`).
  */
 import type { PreviewOptions, RendererAPI, StartOptions } from '@/core/renderApi';
 import { useStore } from '@/core/store';
@@ -12,8 +16,8 @@ import { paintFallback } from './fallback';
 import { RayTracer, type RenderTarget, type TraceUniforms } from './gl/RayTracer';
 import { SceneGPU } from './gl/SceneGPU';
 import { PreviewQueue, type QueuedPreview } from './previewQueue';
-import { mainQuality, previewQuality, type TraceQuality } from './quality';
-import { BandController, extendPasses, passGrid, planPasses, regionToPixels, totalWork, type Pass, type Rect } from './scheduler';
+import { EDGE_STRONG_THRESHOLD, EDGE_THRESHOLD, filterKernel, mainQuality, previewQuality, type FilterKernel, type TraceQuality } from './quality';
+import { BandController, edgeMasked, extendPasses, passGrid, planPasses, regionToPixels, totalWork, type Pass, type Rect } from './scheduler';
 import { computeSkyParams } from './skyParams';
 
 const FRAME_BUDGET_MS = 12;
@@ -40,6 +44,14 @@ interface MainJob {
   samplesDone: number;
   keepImage: boolean;
   uniforms: TraceUniforms | null;
+  /**
+   * Edge-only anti-aliasing: 'pending' until the first masked pass builds the mask (from the
+   * finished first sample pass, inside the region), then 'ready' for every later pass, resumes
+   * included. 'off' = every pixel gets every sample.
+   */
+  mask: 'pending' | 'ready' | 'off';
+  /** The soft pixel filter applied when presenting sample passes. */
+  filter: FilterKernel;
   message?: string;
 }
 
@@ -90,11 +102,21 @@ export class WebGLRenderer implements RendererAPI {
   private previewScene: SceneGPU;
   private accum: RenderTarget | null = null;
   private scratch: RenderTarget | null = null;
+  /** R8 edge mask of the main job: allocated on first use, released with accum (so always its size). */
+  private edges: RenderTarget | null = null;
+  /** Rows of the soft pixel filter: allocated on first use, released with accum. */
+  private soft: RenderTarget | null = null;
   private previewAccum: RenderTarget | null = null;
   private job: MainJob | null = null;
   private previewJob: PreviewJob | null = null;
   private queue = new PreviewQueue<PreviewPayload>();
   private mainBands = new BandController(FRAME_BUDGET_MS);
+  /**
+   * Edge-masked passes cost a small, scene-dependent fraction of a full pass per cell: they keep
+   * their own estimate, so a full pass never inherits theirs (one oversized band) and they are
+   * not held to a full pass's.
+   */
+  private maskedBands = new BandController(FRAME_BUDGET_MS);
   private previewBands = new BandController(PREVIEW_SHARE_MS);
   private listeners = new Set<(p: RenderProgress) => void>();
   private progress: RenderProgress = IDLE;
@@ -169,8 +191,11 @@ export class WebGLRenderer implements RendererAPI {
       samplesDone: 0,
       keepImage,
       uniforms: null,
+      mask: quality.edgesOnly ? 'pending' : 'off',
+      filter: filterKernel(quality.filterSigma),
     };
     this.mainBands.resetGrowth();
+    this.maskedBands.resetGrowth();
     this.emit(true);
     this.schedule();
   }
@@ -292,6 +317,10 @@ export class WebGLRenderer implements RendererAPI {
     if (!this.accum || this.accum.w !== w || this.accum.h !== h) {
       this.rt.deleteTarget(this.accum);
       this.rt.deleteTarget(this.scratch);
+      this.rt.deleteTarget(this.edges);
+      this.rt.deleteTarget(this.soft);
+      this.edges = null;
+      this.soft = null;
       const big = w * h > 4_200_000;
       this.accum = this.rt.createTarget(w, h, big ? this.rt.gl.RGBA16F : this.rt.accumFormat);
       this.scratch = this.rt.createTarget(Math.ceil(w / 2), Math.ceil(h / 2), big ? this.rt.gl.RGBA16F : this.rt.accumFormat);
@@ -324,15 +353,17 @@ export class WebGLRenderer implements RendererAPI {
     if (!accum || !scratch || !u) return;
     this.mainScene.update(job.scene);
     let spent = 0;
-    let drew = false;
+    let drew: Pass | null = null;
     while (spent < budgetMs && job.passIndex < job.passes.length) {
       const pass = job.passes[job.passIndex];
+      const mask = edgeMasked(pass, job.mask !== 'off') ? this.edgeMask(job, accum) : null;
+      const bands = mask ? this.maskedBands : this.mainBands;
       const grid = passGrid(pass, job.region);
-      const rows = this.mainBands.rowsFor(grid.cols, grid.rows - job.rowsDone);
+      const rows = bands.rowsFor(grid.cols, grid.rows - job.rowsDone);
       const cells = rows * grid.cols;
-      this.rt.timer.measure(() => this.drawMainBand(job, pass, rows, accum, scratch, u), cells, this.mainBands);
-      drew = true;
-      spent += this.mainBands.costPerCell * cells;
+      this.rt.timer.measure(() => this.drawMainBand(job, pass, rows, accum, scratch, u, mask), cells, bands);
+      drew = pass;
+      spent += bands.costPerCell * cells;
       job.rowsDone += rows;
       job.workDone += cells;
       if (job.rowsDone >= grid.rows) {
@@ -340,9 +371,11 @@ export class WebGLRenderer implements RendererAPI {
         job.passIndex++;
         job.rowsDone = 0;
         this.mainBands.resetGrowth();
+        this.maskedBands.resetGrowth();
       }
     }
-    if (drew) this.presentMain(job, accum);
+    // The mosaic stays chunky: the soft pixel filter starts with the full-resolution passes.
+    if (drew) this.presentMain(job, accum, drew.kind === 'sample');
     if (job.passIndex >= job.passes.length) {
       job.elapsedMs += performance.now() - job.runningSince;
       job.state = 'done';
@@ -351,7 +384,25 @@ export class WebGLRenderer implements RendererAPI {
     } else this.emit(false);
   }
 
-  private drawMainBand(job: MainJob, pass: Pass, rows: number, accum: RenderTarget, scratch: RenderTarget, u: TraceUniforms): void {
+  /**
+   * The job's edge mask, built on first use: by then the first sample pass has covered the
+   * region, and the mask never changes afterwards, so every marked pixel receives every later
+   * pass and its running average stays exact. Null (and edge-only AA off) if it cannot be allocated.
+   */
+  private edgeMask(job: MainJob, accum: RenderTarget): RenderTarget | null {
+    if (job.mask === 'pending') {
+      this.edges ??= this.rt.createTarget(accum.w, accum.h, this.rt.gl.R8);
+      if (!this.edges) {
+        job.mask = 'off';
+        return null;
+      }
+      this.rt.edgeMask(accum, this.edges, job.region, exposureOf(job.scene), EDGE_THRESHOLD, EDGE_STRONG_THRESHOLD);
+      job.mask = 'ready';
+    }
+    return job.mask === 'ready' ? this.edges : null;
+  }
+
+  private drawMainBand(job: MainJob, pass: Pass, rows: number, accum: RenderTarget, scratch: RenderTarget, u: TraceUniforms, mask: RenderTarget | null): void {
     const r = job.region;
     const top = r.y + r.h;
     const frame = new Float32Array([
@@ -373,13 +424,24 @@ export class WebGLRenderer implements RendererAPI {
     } else {
       const y2 = top - job.rowsDone;
       const y1 = Math.max(r.y, y2 - rows);
-      this.rt.traceBand(this.mainScene, u, frame, accum, { x: r.x, y: y1, w: r.w, h: y2 - y1 }, pass.sample > 1 ? 1 / pass.sample : null);
+      this.rt.traceBand(this.mainScene, u, frame, accum, { x: r.x, y: y1, w: r.w, h: y2 - y1 }, pass.sample > 1 ? 1 / pass.sample : null, mask);
     }
   }
 
-  private presentMain(job: MainJob, accum: RenderTarget): void {
+  /**
+   * The scratch target of the soft pixel filter (half floats are plenty for one row pass of
+   * linear color). If it cannot be allocated the job is presented unfiltered from then on.
+   */
+  private softTarget(job: MainJob, accum: RenderTarget): RenderTarget | null {
+    this.soft ??= this.rt.createTarget(accum.w, accum.h, this.rt.gl.RGBA16F);
+    if (!this.soft) job.filter = filterKernel(0);
+    return this.soft;
+  }
+
+  private presentMain(job: MainJob, accum: RenderTarget, filtered: boolean): void {
     if (!this.outputCtx) return;
-    this.rt.display(accum, job.width, job.height, exposureOf(job.scene));
+    const scratch = filtered && job.filter.radius > 0 ? this.softTarget(job, accum) : null;
+    this.rt.display(accum, job.width, job.height, exposureOf(job.scene), scratch ? { kernel: job.filter, scratch } : null);
     this.outputCtx.save();
     if (job.keepImage) {
       const r = job.region;
@@ -573,15 +635,19 @@ export class WebGLRenderer implements RendererAPI {
     this.previewScene = new SceneGPU(this.rt.gl, this.rt.terrains);
     this.accum = null;
     this.scratch = null;
+    this.edges = null;
+    this.soft = null;
     this.previewAccum = null;
     const job = this.job;
     if (job) {
-      // The accumulated image is gone: start the passes over (the 2D output keeps the old image meanwhile).
+      // The accumulated image is gone: start the passes over (the 2D output keeps the old image
+      // meanwhile). The edge mask is rebuilt once the first sample pass is done again.
       job.passIndex = 0;
       job.rowsDone = 0;
       job.workDone = 0;
       job.samplesDone = 0;
       job.keepImage = false;
+      job.mask = job.quality.edgesOnly ? 'pending' : 'off';
       job.region = { x: 0, y: 0, w: job.width, h: job.height };
       job.passes = planPasses(job.quality.mosaic, job.quality.samples);
       job.workTotal = totalWork(job.passes, job.region);
@@ -611,6 +677,8 @@ export class WebGLRenderer implements RendererAPI {
     if (!this.rt.lost) {
       this.rt.deleteTarget(this.accum);
       this.rt.deleteTarget(this.scratch);
+      this.rt.deleteTarget(this.edges);
+      this.rt.deleteTarget(this.soft);
       this.rt.deleteTarget(this.previewAccum);
       this.mainScene.dispose();
       this.previewScene.dispose();

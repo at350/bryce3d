@@ -33,7 +33,7 @@ export function defaultCamera(): CameraState {
 }
 
 export function defaultRenderSettings(): RenderSettings {
-  return { width: 800, height: 600, quality: 'normal', mosaic: true, maxBounces: 6, samples: 12, exposure: 1 };
+  return { width: 800, height: 600, quality: 'normal', mosaic: true, maxBounces: 6, samples: 12, exposure: 1, antialias: 'full', softness: 30 };
 }
 
 export function defaultLight(type: ObjectType): LightParams {

@@ -152,13 +152,39 @@ Implement `RendererAPI` (`core/renderApi.ts`) as a singleton returned by `getRen
   procedural cloud layers (stratus = flat wispy, cumulus = puffy, shaded by sun) at their altitudes,
   fading toward the horizon; haze (distance-based horizon whitening with hazeColor), height fog
   (fogDensity, fogHeight, fogColor); optional rainbow. Sunset coloring when the sun is low. The look should
-  be the saturated, painterly Bryce look, not physically exact.
+  be the saturated, painterly Bryce look, not physically exact. Each cloud layer's `turbulence` (0..100)
+  tears it into uneven, broken streaks: a three-scale domain warp (stratus bends across its streaks and
+  breaks along them, cumulus tears every way), one more fBm octave and a large-scale density swing (dense
+  and empty stretches). Its `glow` (0..100) lights it with the sky's glow color (the `GLOW` uniform, so it
+  follows the sun color and Sun Glow) in smooth lobes around the sun, weighted toward thin parts and
+  edges (silver linings, light bleeding through). Both travel in the `CLOUD_STYLE` slot and are skipped at
+  0, which renders exactly the plain layer.
 - **Progressive render**: Bryce mosaic: passes of block sizes 16 → 8 → 4 → 2 → 1 pixels (shown
   nearest-neighbor, chunky), then anti-aliasing passes accumulating jittered samples up to
   `render.samples` (draft: no AA). Time-slice every pass into scanline bands sized to ~10–14 ms of GPU work
   per frame so the UI stays responsive and the GPU watchdog never fires. Report progress through
   `subscribe` and mirror it into the store with `setRenderProgress`. `outputCanvas` is a 2D canvas at the
   document size showing the tone-mapped/gamma-corrected result (`render.exposure`).
+- **Anti-aliasing** (`render.antialias`, Bryce 4 manual §"Anti-Aliasing"): `'full'` (default) is Bryce's
+  "Fine Art": every pixel gets every sample. `'edges'` is Bryce's "Normal" and is opt-in, because the
+  pixels it leaves at one sample keep the Monte Carlo grain of fog, volumes, soft shadows and glossy
+  reflections, not only texture grit. In `'edges'` mode, once the first full-resolution pass covers the job's region, an edge mask is built
+  once (a pixel is marked when its displayed color, after exposure, tone map and sRGB, and 3x3-median
+  filtered so single-sample noise on water and glossy reflections does not mark itself, differs from one
+  of its 8 neighbours inside the region by more than `EDGE_THRESHOLD` = 0.12 per channel, or the
+  unfiltered color by more than `EDGE_STRONG_THRESHOLD` = 0.4, which keeps thin high-contrast
+  features), and every later
+  sample pass traces only marked pixels; the others return at once with blend weight 0 (the trace alpha
+  is the pass weight; a `discard` made every pass ~15% slower on Metal) and keep their single sample, so
+  textures stay rough. The mask never changes during a job, so the running average stays exact; resuming
+  continues on it, a region render builds it inside its region, a context loss rebuilds it. Masked passes
+  size their bands with their own cost estimate. Progress still counts full passes.
+- **Soft pixel filter** (`render.softness` 0..100, default 30): a Gaussian reconstruction filter of sigma
+  softness / 100 × 1.5 px applied to the accumulated image in linear light, before the tone map, each time
+  a full-resolution pass is presented (separable: rows in a half-float pass, columns in the display pass;
+  the mosaic stays chunky). 0 reproduces the unfiltered image exactly. Main renders and their PNG export
+  only; previews, thumbnails and lab previews stay unfiltered. A region render still changes no pixel
+  outside its region, so the filter's 1–5 px just outside keep the old image's blur.
 - **Previews**: `preview()` renders small images (Nano Preview ~ 160 x 120 at 1–4 spp; lab previews; preset
   thumbnails) between main-render bands; requests with the same `key` supersede older ones.
 - **Quality**: draft = 1 spp, hard shadows, 2 bounces; normal = mosaic + `samples` spp, soft shadows,
@@ -224,7 +250,8 @@ Implement `RendererAPI` (`core/renderApi.ts`) as a singleton returned by `getRen
   about). **Dialogs**: Attributes (name, position/rotation/size numeric fields, hidden/locked/show-as-box,
   family, type-specific params: torus thickness, stone seed/lumpiness/roughness, tree params, light params),
   Render settings (size presets 4:3 / 16:9 / square, custom size, quality, samples, bounces, mosaic,
-  exposure), About (credits + the unofficial disclaimer), Shortcuts.
+  exposure, anti-aliasing Edges only / Every pixel, softness), About (credits + the unofficial
+  disclaimer), Shortcuts.
 - **Keyboard**: Ctrl/Cmd+Z / Shift+Ctrl+Z undo/redo, Ctrl/Cmd+D duplicate, Delete/Backspace delete,
   Ctrl/Cmd+R render, Ctrl/Cmd+1/2/3 palettes, Ctrl/Cmd+A select all, Esc deselect/close, Ctrl/Cmd+M
   materials lab, Ctrl/Cmd+E edit selected, Ctrl/Cmd+S save, Ctrl/Cmd+O open, arrow keys nudge selection.
@@ -270,8 +297,10 @@ Implement `RendererAPI` (`core/renderApi.ts`) as a singleton returned by `getRen
 
 - `presets.ts`: `SKY_CATEGORIES`, `SKY_PRESETS` (40+ original skies: soft daylight, deep blue noon, golden
   hour, blood-red sunset, purple dusk, teal dream, pink alien, green alien, stormy, foggy morning, misty
-  lake, desert haze, arctic, moonlit night, starfield, eclipse, two-tone 90s CD cover, vaporwave, …).
-- `random.ts`: `randomSky(seed?)`.
+  lake, desert haze, arctic, moonlit night, starfield, eclipse, two-tone 90s CD cover, vaporwave, torn
+  sun-lit streaks, …).
+- `random.ts`: `randomSky(seed?)`; some rolls tear or sun-light a layer (chances by mood, none at night),
+  rolled from a second stream so the rest of a seed's sky does not change.
 - **Sky & Fog palette** (guide §"The Sky & Fog Palette" line 11264): sky mode thumbnails (soft, darker,
   custom, off), drag-pad thumbnails for Shadows, Fog (x = density, y = height), Haze, Cloud height,
   Cloud cover, Cloud frequency/amplitude; color swatches (sky dome, fog, haze, cloud, sun); the sun/moon
@@ -279,8 +308,9 @@ Implement `RendererAPI` (`core/renderApi.ts`) as a singleton returned by `getRen
   dots; randomize-sky dice; triangle → Skies library. Every change updates immediately (Nano Preview).
 - **Sky Lab room** (guide line 11335–12622): tabs Sun & Moon (sun color/size/glow, azimuth/altitude
   numeric + trackball, moon color/size/phase, stars), Cloud Cover (stratus and cumulus: on/off, cover,
-  height, frequency, amplitude, color, shading, offset), Atmosphere (mode, horizon/zenith/dome colors,
-  haze, fog, ambient, shadows, rainbow). Live preview via `renderer.preview` (`skyOnly` and full scene).
+  height, frequency, amplitude, shading, turbulence, sun glow, color, offset), Atmosphere (mode,
+  horizon/zenith/dome colors, haze, fog, ambient, shadows, rainbow). Live preview via `renderer.preview`
+  (`skyOnly` and full scene).
 
 ### 3.7 Scenes & IO (`src/scenes/**`, `src/io/**`, `src/ui/library/**`, `src/ui/dialogs/ShareDialog.tsx`)
 

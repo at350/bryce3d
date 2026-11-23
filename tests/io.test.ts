@@ -3,10 +3,10 @@ import { defaultCamera, defaultRenderSettings } from '@/core/defaults';
 import { defaultMaterial } from '@/core/materialUtils';
 import type { Scene, SceneObject } from '@/core/types';
 import { decodeHeights8, encodeHeights8, base64ToF32, f32ToBase64 } from '@/io/heights';
-import { NOT_A_SCENE } from '@/io/normalize';
+import { NOT_A_SCENE, normalizeRender } from '@/io/normalize';
 import { deserializeScene, deserializeSceneReport, normalizeScene, normalizeSceneReport, serializeScene } from '@/io/serialize';
 import { SHARE_WARN_CHARS, decodeShareHash, encodeShareLink, readShareHash } from '@/io/share';
-import { packScene } from '@/io/shareCodec';
+import { packScene, unpackScene } from '@/io/shareCodec';
 import { make } from '@/scenes/build/kit';
 import { shapedTerrain } from '@/scenes/build/terrains';
 import { createDefaultScene } from '@/scenes/defaultScene';
@@ -106,6 +106,14 @@ describe('normalizeScene', () => {
     expect(sphere.material).toEqual(defaultMaterial());
     expect(terrain.terrain!.resolution).toBe(32);
     expect(Array.from(terrain.terrain!.heights)).toEqual(Array.from(heightsFromRecipe(terrain.terrain!.recipe!)));
+  });
+
+  it('reads the anti-aliasing mode and softness, giving files from before them the defaults', () => {
+    expect(normalizeRender({})).toMatchObject({ antialias: 'full', softness: 30 });
+    expect(normalizeRender({ antialias: 'edges', softness: 0 })).toMatchObject({ antialias: 'edges', softness: 0 });
+    expect(normalizeRender({ antialias: 'supersample', softness: 400 })).toMatchObject({ antialias: 'full', softness: 100 });
+    expect(normalizeRender({ antialias: 3, softness: -5 })).toMatchObject({ antialias: 'full', softness: 0 });
+    expect(normalizeRender({ softness: 'soft' }).softness).toBe(30);
   });
 
   it('fills partial fields, clamps ranges and repairs bad values', () => {
@@ -249,5 +257,16 @@ describe('share links', () => {
     const link = encodeShareLink(createDefaultScene(), { base: BASE });
     const payload = link.split('#s=')[1];
     expect(decodeShareHash(`#s=${encodeURIComponent(payload)}`)).not.toBeNull();
+  });
+
+  it('leaves default anti-aliasing and softness out of links, and old links read them as defaults', () => {
+    const scene = createDefaultScene();
+    expect(packScene(scene).r).toBeUndefined();
+    const bryceNormal = { ...scene, render: { ...scene.render, antialias: 'edges' as const, softness: 0 } };
+    expect(packScene(bryceNormal).r).toEqual({ antialias: 'edges', softness: 0 });
+    expect(decodeShareHash(hashOf(encodeShareLink(bryceNormal, { base: BASE })))!.render).toEqual(bryceNormal.render);
+    // A link made before these settings existed carries neither field.
+    const old = normalizeScene(unpackScene({ ...packScene(scene), r: { samples: 4 } }));
+    expect(old.render).toEqual({ ...defaultRenderSettings(), samples: 4 });
   });
 });

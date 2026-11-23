@@ -214,6 +214,15 @@ vec3 tracePath(vec3 ro, vec3 rd) {
 
 layout(location = 0) out vec4 outColor;
 
+// This pass's weight in the target's running average (1 = overwrite). It leaves as the source
+// alpha, which the blend unit applies (see RayTracer.traceBand).
+uniform float uWeight;
+// Edge-only anti-aliasing: sample passes after the first trace only the pixels the edge mask
+// marks; the others write weight 0, keeping the value they hold. Not a discard: a shader that
+// may discard ran every pass ~15% slower on Metal, masked or not.
+uniform sampler2D uMask;
+uniform bool uMasked;
+
 // Low-discrepancy (R2) subpixel offsets, rotated per pixel.
 vec2 r2Jitter(float index) {
   return fract(vec2(0.7548776662, 0.5698402910) * index + 0.5);
@@ -221,6 +230,10 @@ vec2 r2Jitter(float index) {
 
 void main() {
   ivec2 fc = ivec2(gl_FragCoord.xy);
+  if (uMasked && texelFetch(uMask, fc, 0).r < 0.5) {
+    outColor = vec4(0.0);
+    return;
+  }
   float block = uFrame[0].z;
   float sampleIndex = uFrame[0].w;
   gSeed = pcg(uint(fc.x) * 1973u + pcg(uint(fc.y) * 9277u + uint(uFrame[1].w)) + uint(sampleIndex) * 26699u);
@@ -238,6 +251,6 @@ void main() {
   if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
   float l = maxc(col);
   if (l > 24.0) col *= 24.0 / l;
-  outColor = vec4(max(col, vec3(0.0)), 1.0);
+  outColor = vec4(max(col, vec3(0.0)), uWeight);
 }
 `;

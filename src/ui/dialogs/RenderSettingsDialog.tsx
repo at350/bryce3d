@@ -1,7 +1,7 @@
-/** Render Settings: document size presets or a custom size (with constrain proportions), quality, samples, bounces, mosaic and exposure. */
+/** Render Settings: document size presets or a custom size (with constrain proportions), quality, samples, bounces, mosaic, exposure, anti-aliasing and softness. */
 import { useState } from 'react';
 import { useStore } from '@/core/store';
-import type { RenderQuality } from '@/core/types';
+import type { RenderAntialias, RenderQuality } from '@/core/types';
 import { Button, Dialog, DragValue, Slider, Toggle } from '@/ui/kit';
 import { startRender } from '../actions';
 import { aspectLabel, constrainSize, MAX_SIDE, MIN_SIDE, SIZE_GROUPS } from './renderSizes';
@@ -12,6 +12,11 @@ const QUALITY: { id: RenderQuality; label: string; note: string }[] = [
   { id: 'premium', label: 'Premium', note: 'Four times the samples, blurry reflections' },
 ];
 
+const ANTIALIAS: { id: RenderAntialias; label: string; note: string }[] = [
+  { id: 'edges', label: 'Edges only', note: "Like Bryce's Normal: extra samples go to edges only, so textures, fog and soft shadows keep their grain" },
+  { id: 'full', label: 'Every pixel', note: "Like Bryce's Fine Art: every pixel gets every sample (slower)" },
+];
+
 export function RenderSettingsDialog() {
   const r = useStore((s) => s.scene.render);
   const set = useStore.getState().setRenderSettings;
@@ -20,6 +25,7 @@ export function RenderSettingsDialog() {
   const gesture = { onStart: () => useStore.getState().beginGesture(), onEnd: () => useStore.getState().endGesture() };
   const mp = (r.width * r.height) / 1e6;
   const quality = QUALITY.find((q) => q.id === r.quality) ?? QUALITY[1];
+  const antialias = ANTIALIAS.find((a) => a.id === r.antialias) ?? ANTIALIAS[1];
 
   return (
     <Dialog
@@ -106,11 +112,29 @@ export function RenderSettingsDialog() {
         </div>
         <p className="dlg-note">{quality.note}</p>
         <div className="dlg-grid">
-          <Slider label="Anti-alias samples" value={r.samples} min={1} max={256} step={1} width={420} {...gesture} onChange={(v) => set({ samples: v })} hint="Samples per pixel after the mosaic passes" />
+          <Slider label="Anti-alias samples" value={r.samples} min={1} max={256} step={1} width={420} {...gesture} onChange={(v) => set({ samples: v })} hint="Samples per pixel after the mosaic passes (with Edges only, edge pixels get them all, the rest keep one)" />
           <Slider label="Ray bounces" value={r.maxBounces} min={1} max={12} step={1} width={420} {...gesture} onChange={(v) => set({ maxBounces: v })} hint="How deep reflections and refractions go" />
           <Slider label="Exposure" value={r.exposure} min={0.5} max={2} step={0.01} precision={2} width={420} {...gesture} onChange={(v) => set({ exposure: v })} />
         </div>
         <Toggle label="Mosaic passes (big blocks refining to pixels)" value={r.mosaic} onChange={(v) => set({ mosaic: v })} />
+      </div>
+
+      <div className="dlg-section">
+        <h3 className="dlg-heading">Anti-aliasing</h3>
+        <div className="dlg-row" role="radiogroup" aria-label="Anti-aliasing">
+          {ANTIALIAS.map((a) => (
+            <Button key={a.id} pressed={antialias.id === a.id} hint={a.note} onClick={() => set({ antialias: a.id })}>
+              {a.label}
+            </Button>
+          ))}
+        </div>
+        <p className="dlg-note">
+          {antialias.note}
+          {r.quality === 'draft' ? ' · Draft has no anti-aliasing passes' : ''}
+        </p>
+        <div className="dlg-grid">
+          <Slider label="Softness" value={r.softness} min={0} max={100} step={1} width={420} {...gesture} onChange={(v) => set({ softness: v })} hint="Blends neighbouring pixels like the soft 90s renders (0 = crisp)" />
+        </div>
       </div>
     </Dialog>
   );

@@ -273,6 +273,16 @@ export const SKY_PRESETS: SkyPreset[] = [
       stratus: { cover: 30, height: 2000, frequency: 45, amplitude: 55, shading: 0.2, color: hex('#fbe8f6') },
       cumulus: false,
     }),
+  preset('burning-edges', 'Burning Edges', DUSK,
+    'The sun slips behind ragged cumulus and sets every thin edge alight in orange.', {
+      mode: 'custom', linkSunToView: true,
+      horizonColor: hex('#ff8a4a'), zenithColor: hex('#3a2a6a'), skyDomeColor: hex('#b0628a'),
+      sunColor: hex('#ffc070'), sunSize: 36, sunGlow: 75, sunAzimuth: 0, sunAltitude: 14,
+      haze: 26, hazeColor: hex('#ffa070'),
+      shadowIntensity: 75, ambient: 32, ambientColor: hex('#a2728a'),
+      stratus: { cover: 25, height: 2200, frequency: 45, amplitude: 70, shading: 0.3, color: hex('#ffb89a'), turbulence: 40, glow: 60 },
+      cumulus: { cover: 38, height: 800, frequency: 110, amplitude: 220, shading: 0.7, color: hex('#c86a8e'), turbulence: 30, glow: 100 },
+    }),
 
   // --- Night ----------------------------------------------------------------
   preset('moonlit-night', 'Moonlit Night', NIGHT,
@@ -665,6 +675,16 @@ export const SKY_PRESETS: SkyPreset[] = [
       fogDensity: 25, fogHeight: 3, fogColor: hex('#e2f2e2'),
       shadowIntensity: 55, ambient: 40, ambientColor: hex('#a2d2c2'),
       stratus: { cover: 35, height: 2000, frequency: 40, amplitude: 60, shading: 0.2, color: hex('#fff2d2') },
+      cumulus: false,
+    }),
+  preset('torn-gold', 'Torn Gold', CD,
+    'A low gold sun behind wind-torn streaks of stratus, light bleeding through every thin edge.', {
+      mode: 'custom', linkSunToView: true,
+      horizonColor: hex('#ff9a4a'), zenithColor: hex('#1e1e66'), skyDomeColor: hex('#8a5a8a'),
+      sunColor: hex('#ffe0a0'), sunSize: 32, sunGlow: 70, sunAzimuth: 0, sunAltitude: 14,
+      haze: 18, hazeColor: hex('#ffb272'),
+      shadowIntensity: 70, ambient: 34, ambientColor: hex('#b08aa2'),
+      stratus: { cover: 46, height: 1500, frequency: 55, amplitude: 170, shading: 0.4, color: hex('#f0a8b8'), turbulence: 65, glow: 90 },
       cumulus: false,
     }),
 

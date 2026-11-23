@@ -41,6 +41,8 @@ export const CLOUD_RANGES: Record<CloudNumberKey, ValueRange> = {
   frequency: { min: 1, max: 400, label: 'Frequency' },
   amplitude: { min: 0, max: 400, label: 'Amplitude' },
   shading: { min: 0, max: 1, label: 'Shading', precision: 2 },
+  turbulence: { min: 0, max: 100, label: 'Turbulence' },
+  glow: { min: 0, max: 100, label: 'Sun Glow' },
 };
 
 /** Cloud offsets are free (they slide the pattern); keep them finite and modest. */

@@ -24,6 +24,15 @@ export function planPasses(mosaic: boolean, samples: number): Pass[] {
   return passes;
 }
 
+/**
+ * Whether a pass traces only the pixels of the edge mask: with edge-only anti-aliasing, every
+ * sample pass after the first (the mask is built from that first full-resolution pass, so a
+ * mosaic or 1-sample render never needs one). Progress still counts these passes in full.
+ */
+export function edgeMasked(pass: Pass, edgesOnly: boolean): boolean {
+  return edgesOnly && pass.kind === 'sample' && pass.sample > 1;
+}
+
 /** Extra sample passes appended when a finished render is resumed. */
 export function extendPasses(passes: Pass[], extra: number): Pass[] {
   const last = passes.reduce((m, p) => Math.max(m, p.sample), 0);

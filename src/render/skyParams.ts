@@ -29,6 +29,7 @@ export const SKY_SLOTS = [
   'DOME', // rgb sky dome tint, w: rainbow strength
   'BELOW', // rgb below-horizon color, w: night 0..1
   'CLOUD_LIGHT', // rgb light reaching the clouds, w: unused
+  'CLOUD_STYLE', // stratus turbulence, stratus glow, cumulus turbulence, cumulus glow (0..1; 0 when off)
 ] as const;
 
 export type SkySlot = (typeof SKY_SLOTS)[number];
@@ -139,8 +140,8 @@ export function deriveSky(sky: Sky, camera: CameraState): SkyDerived {
   return { sunDir, sunUp, moonDir, moonUp, sunset: auto ? sunset : 0, night, sunLight, moonLight, ambient: ambientWithMoon, zenith, horizon };
 }
 
-function cloudSlots(layer: CloudLayer | undefined, light: number): { prm: number[]; color: number[]; offset: [number, number] } {
-  if (!layer || !layer.enabled) return { prm: [0, 1000, 100, 100], color: [1, 1, 1, 0.5], offset: [0, 0] };
+function cloudSlots(layer: CloudLayer | undefined, light: number): { prm: number[]; color: number[]; offset: [number, number]; style: [number, number] } {
+  if (!layer || !layer.enabled) return { prm: [0, 1000, 100, 100], color: [1, 1, 1, 0.5], offset: [0, 0], style: [0, 0] };
   const c = lin(layer.color, [1, 1, 1]);
   return {
     prm: [
@@ -151,6 +152,7 @@ function cloudSlots(layer: CloudLayer | undefined, light: number): { prm: number
     ],
     color: [c[0] * light, c[1] * light, c[2] * light, clamp(fin(layer.shading, 0.5), 0, 1)],
     offset: [fin(layer.offset?.[0], 0), fin(layer.offset?.[1], 0)],
+    style: [clamp(fin(layer.turbulence, 0), 0, 100) / 100, clamp(fin(layer.glow, 0), 0, 100) / 100],
   };
 }
 
@@ -209,6 +211,7 @@ export function computeSkyParams(sky: Sky, camera: CameraState): Float32Array {
   set('CUMULUS', cu.prm[0] * cloudsOn, cu.prm[1], cu.prm[2], cu.prm[3]);
   set('CUMULUS_COLOR', cu.color[0], cu.color[1], cu.color[2], cu.color[3]);
   set('CLOUD_OFFSETS', st.offset[0], st.offset[1], cu.offset[0], cu.offset[1]);
+  set('CLOUD_STYLE', st.style[0], st.style[1], cu.style[0], cu.style[1]);
 
   const sunsetColor = scale(SUNSET_SKY, 1.05);
   set('SUNSET', sunsetColor[0], sunsetColor[1], sunsetColor[2], d.sunset);

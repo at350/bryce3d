@@ -11,6 +11,8 @@ export function makeCloudLayer(overrides: Partial<CloudLayer> = {}): CloudLayer 
     color: [1, 1, 1],
     shading: 0.5,
     offset: [0, 0],
+    turbulence: 0,
+    glow: 0,
     ...overrides,
   };
 }

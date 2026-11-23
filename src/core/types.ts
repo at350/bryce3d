@@ -352,6 +352,16 @@ export interface CloudLayer {
   shading: number;
   /** Horizontal offset in world units (lets presets/animation slide the clouds). */
   offset: [number, number];
+  /**
+   * 0..100: tears the layer into uneven, broken streaks (stronger multi-scale warp, an extra
+   * octave, dense and empty stretches). 0 = the plain, evenly spaced pattern. Missing = 0.
+   */
+  turbulence: number;
+  /**
+   * 0..100: how strongly the sun's glow lights the layer near the sun (silver linings, light
+   * bleeding through thin parts), in the sky's glow color. 0 = no glow lighting. Missing = 0.
+   */
+  glow: number;
 }
 
 export interface Sky {
@@ -413,6 +423,15 @@ export interface CameraState {
 
 export type RenderQuality = 'draft' | 'normal' | 'premium';
 
+/**
+ * Which pixels the anti-aliasing passes (every sample after the first) refine:
+ * - edges: Bryce's "Anti-Aliasing Normal". After the first full-resolution pass, only pixels
+ *          that differ sharply from a neighbour (silhouettes, the horizon, hard shadow edges)
+ *          get more samples; the rest keep their single sample, so textures stay rough.
+ * - full:  Bryce's "Fine Art": every pixel gets every sample.
+ */
+export type RenderAntialias = 'edges' | 'full';
+
 export interface RenderSettings {
   /** Document size in pixels (Bryce default 640 x 480 here). */
   width: number;
@@ -427,6 +446,14 @@ export interface RenderSettings {
   samples: number;
   /** Output gamma/exposure tweak, 0.5..2 (1 = neutral). */
   exposure: number;
+  /** Which pixels the anti-aliasing samples go to. Missing = 'full'. Draft has no AA passes either way. */
+  antialias: RenderAntialias;
+  /**
+   * 0..100: soft pixel filter. A Gaussian reconstruction filter of sigma softness / 100 x 1.5 px
+   * blends neighbouring pixels of the render, like the soft 90s originals; 0 = crisp square
+   * pixels. Main renders (and their PNG export) only: previews stay unfiltered. Missing = 30.
+   */
+  softness: number;
 }
 
 // ---------------------------------------------------------------------------

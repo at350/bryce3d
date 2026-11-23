@@ -1,7 +1,7 @@
 /**
  * One cloud layer in the Sky Lab's Cloud Cover tab (Stratus or Cumulus): on/off, a live
- * texture of the cloud pattern, cover / height / frequency / amplitude / shading sliders,
- * color, offset knob, quick shape buttons, a new-pattern dice and reset.
+ * texture of the cloud pattern, cover / height / frequency / amplitude / shading / turbulence /
+ * sun glow sliders, color, offset knob, quick shape buttons, a new-pattern dice and reset.
  */
 import { useCallback } from 'react';
 import { randomSeed, mulberry32 } from '@/core/math';
@@ -74,6 +74,8 @@ export function CloudLayerPanel({ kind, sky, onChange }: { kind: 'stratus' | 'cu
           <RangeSlider range={CLOUD_RANGES.frequency} value={layer.frequency} onChange={(v) => set({ frequency: v })} width={230} hint="Frequency: higher = smaller, more frequent clouds" />
           <RangeSlider range={CLOUD_RANGES.amplitude} value={layer.amplitude} onChange={(v) => set({ amplitude: v })} width={230} hint="Amplitude: higher = denser clouds with sharper edges" />
           <RangeSlider range={CLOUD_RANGES.shading} value={layer.shading} onChange={(v) => set({ shading: v })} width={230} scale={100} hint="How much the clouds shade their own undersides" />
+          <RangeSlider range={CLOUD_RANGES.turbulence} value={layer.turbulence} onChange={(v) => set({ turbulence: v })} width={230} hint="Turbulence: tears the clouds into uneven, broken streaks" />
+          <RangeSlider range={CLOUD_RANGES.glow} value={layer.glow} onChange={(v) => set({ glow: v })} width={230} hint="Sun Glow: how strongly the sun's glow lights these clouds near the sun" />
           <div className="skylab__row">
             <SwatchField label="Color" value={layer.color} onChange={(c) => set({ color: c })} hint={`${info.title} color`} />
             <div className="skylab__knobwrap">

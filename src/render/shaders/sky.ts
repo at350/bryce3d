@@ -1,6 +1,51 @@
 /** The painterly Bryce sky: gradient, sun disc + glow, sunset band, moon, stars, clouds, rainbow, haze. */
 export const SKY_GLSL = /* glsl */ `
-vec4 cloudLayer(vec3 ro, vec3 rd, vec4 prm, vec4 col, vec2 off, bool cumulus, out float tHit) {
+// 2D value noise (3 channels) hashed at full float precision. The noise texture's hardware
+// filter quantizes its weights, which shows as lattice seams under warps as large as cloudTear's.
+vec3 hashNoise2(vec2 p, float z) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  f = f * f * (3.0 - 2.0 * f);
+  vec3 a = hash33(vec3(i, z));
+  vec3 b = hash33(vec3(i.x + 1.0, i.y, z));
+  vec3 c = hash33(vec3(i.x, i.y + 1.0, z));
+  vec3 d = hash33(vec3(i + 1.0, z));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// Turbulence: a multi-scale domain warp that bends the pattern (large scale), shears it into
+// broken lengths (middle scale) and frays its edges (small scale). Weights already hold the
+// turbulence amount, so a zero weight leaves that scale alone. z: integer seed.
+vec2 cloudTear(vec2 q, float z, vec2 big, vec2 mid, float small) {
+  vec3 a = hashNoise2(q * 0.12, z) - 0.5;
+  vec3 b = hashNoise2(q * 0.8 + a.zx, z + 1.0) - 0.5;
+  vec4 c = noise3v(vec3(q * 3.1 + b.zy, z + 0.6)) - 0.5;
+  return a.xy * big + b.xy * mid + c.xy * small;
+}
+
+// Large-scale density swing for a torn layer: some stretches run dense, others empty.
+float cloudSwing(vec2 p, float z, float t) {
+  return (smoothstep(0.25, 0.75, noise3(vec3(p, z))) - 0.6) * 0.8 * t;
+}
+
+// fbmRaw plus one more octave weighted by extra (extra = 0 is fbmRaw's pattern).
+float cloudFbm(vec3 p, int oct, float rough, float extra) {
+  float sum = 0.0;
+  float amp = 1.0;
+  float norm = 0.0;
+  for (int i = 0; i <= oct; i++) {
+    float a = i == oct ? amp * extra : amp;
+    sum += a * noise3(p);
+    norm += a;
+    amp *= rough;
+    p = OCT_ROT * p * 2.03 + vec3(1.7, 9.2, 3.1);
+  }
+  return sum / max(norm, 1e-4);
+}
+
+// One cloud layer. prm: cover 0..1 (0 = off), height, frequency, amplitude; col: rgb, w shading;
+// sty: turbulence 0..1, glow 0..1. Both style terms are skipped at 0, so plain layers cost the same.
+vec4 cloudLayer(vec3 ro, vec3 rd, vec4 prm, vec4 col, vec2 off, vec2 sty, bool cumulus, out float tHit) {
   tHit = INF;
   if (prm.x <= 0.0 || abs(rd.y) < 1e-4) return vec4(0.0);
   float t = (prm.y - ro.y) / rd.y;
@@ -13,21 +58,40 @@ vec4 cloudLayer(vec3 ro, vec3 rd, vec4 prm, vec4 col, vec2 off, bool cumulus, ou
   float sharp = clamp(prm.w / 400.0, 0.0, 1.0);
   float thr = mix(0.93, 0.18, prm.x);
   float soft = mix(0.4, 0.06, sharp);
+  // Ease-out, so a little turbulence already breaks the bands.
+  float tb = sty.x * (2.0 - sty.x);
+  float swing = 0.0;
   float n;
   if (cumulus) {
-    n = stretch01(fbmRaw(vec3(q, 0.37), 6, 0.52), 2.3);
+    if (tb > 0.0) {
+      swing = cloudSwing(q * 0.12, 4.4, tb);
+      q += cloudTear(q, 7.0, vec2(1.1 * tb), vec2(0.6 * tb), 0.22 * tb);
+      n = stretch01(cloudFbm(vec3(q, 0.37), 6, 0.52, tb * 3.0), 2.3) + swing;
+    } else {
+      n = stretch01(fbmRaw(vec3(q, 0.37), 6, 0.52), 2.3);
+    }
   } else {
     vec2 qs = vec2(q.x * 0.42, q.y * 1.35);
     vec3 w = noise3v(vec3(qs * 0.6, 7.7)).xyz - 0.5;
-    n = stretch01(fbmRaw(vec3(qs + w.xy * 1.4, 2.9), 5, 0.62), 2.1);
+    qs += w.xy * 1.4;
+    if (tb > 0.0) {
+      // Streaks run along x: bend them across (big y), break them along (mid x), fray both ways.
+      swing = cloudSwing(qs * vec2(0.1, 0.3), 6.6, tb);
+      qs += cloudTear(qs, 3.0, vec2(1.5, 7.0) * tb, vec2(1.7, 0.8) * tb, 0.45 * tb);
+      n = stretch01(cloudFbm(vec3(qs, 2.9), 5, 0.62, tb * 3.0), 2.1) + swing;
+    } else {
+      n = stretch01(fbmRaw(vec3(qs, 2.9), 5, 0.62), 2.1);
+    }
   }
   float d = smoothstep(thr - soft * 0.35, thr + soft, n);
   if (d <= 0.0) return vec4(0.0);
+  // Thin parts and edges pass the most sun glow (silver linings).
+  float thin = 1.0 - 0.85 * d;
   vec3 c;
   if (cumulus) {
     vec2 sd = SKY_SUN_DIR.xz;
     sd = length(sd) > 1e-4 ? normalize(sd) : vec2(0.0);
-    float n2 = stretch01(fbmRaw(vec3(q + sd * 0.08, 0.37), 4, 0.52), 2.3);
+    float n2 = stretch01(fbmRaw(vec3(q + sd * 0.08, 0.37), 4, 0.52), 2.3) + swing;
     float lit = clamp(0.7 + (n - n2) * 3.0, 0.2, 1.3);
     float thick = smoothstep(thr, min(thr + 0.45, 1.0), n);
     float shade = mix(1.0, 1.0 - col.w * 0.85, thick);
@@ -36,6 +100,14 @@ vec4 cloudLayer(vec3 ro, vec3 rd, vec4 prm, vec4 col, vec2 off, bool cumulus, ou
     c = col.rgb * (SKY_CLOUD_LIGHT.rgb * (1.05 - col.w * 0.35 * d) + SKY_ZENITH.rgb * 0.45 + SKY_DOME.rgb * 0.12);
     d *= 0.82;
   }
+  if (sty.y > 0.0) {
+    // Sun glow lighting: forward scattering around the sun in the sky's glow color, as smooth
+    // lobes that fade with the angle to the sun (no rim, so no hard-edged halo), added to the
+    // cloud's own light so dark cores keep their color while thin parts and edges glow.
+    float cs = max(dot(rd, SKY_SUN_DIR.xyz), 0.0);
+    float k = sty.y * (0.3 * pow(cs, 8.0) + 1.4 * pow(cs, 20.0) + 2.4 * pow(cs, 200.0));
+    c += SKY_GLOW.rgb * (k * thin * 3.5);
+  }
   float a = d * fade;
   return vec4(c * a, a);
 }
@@ -43,8 +115,8 @@ vec4 cloudLayer(vec3 ro, vec3 rd, vec4 prm, vec4 col, vec2 off, bool cumulus, ou
 vec4 skyClouds(vec3 ro, vec3 rd) {
   float ts;
   float tc;
-  vec4 st = cloudLayer(ro, rd, SKY_STRATUS, SKY_STRATUS_COLOR, SKY_CLOUD_OFFSETS.xy, false, ts);
-  vec4 cu = cloudLayer(ro, rd, SKY_CUMULUS, SKY_CUMULUS_COLOR, SKY_CLOUD_OFFSETS.zw, true, tc);
+  vec4 st = cloudLayer(ro, rd, SKY_STRATUS, SKY_STRATUS_COLOR, SKY_CLOUD_OFFSETS.xy, SKY_CLOUD_STYLE.xy, false, ts);
+  vec4 cu = cloudLayer(ro, rd, SKY_CUMULUS, SKY_CUMULUS_COLOR, SKY_CLOUD_OFFSETS.zw, SKY_CLOUD_STYLE.zw, true, tc);
   vec4 nearL = tc <= ts ? cu : st;
   vec4 farL = tc <= ts ? st : cu;
   return vec4(nearL.rgb + farL.rgb * (1.0 - nearL.a), nearL.a + farL.a * (1.0 - nearL.a));
