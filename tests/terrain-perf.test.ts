@@ -12,7 +12,9 @@ const time = (fn: () => void) => {
 };
 
 describe('terrain performance', () => {
-  it('generates every terrain quickly', () => {
+  // The loop benchmarks 15 generators at two resolutions; CI can take over 5 s in total
+  // even when every generator meets the per-call limits below.
+  it('generates every terrain quickly', { timeout: 20_000 }, () => {
     generateHeights('fractal', 1, 64); // warm up the JIT
     const rows: string[] = [];
     for (const g of TERRAIN_GENERATORS) {
